@@ -100,7 +100,7 @@ input[type="text"] { padding: 1.5vmin; font-size: 3vmin; border-radius: 1vmin; b
 
 /* FOOTER */
 
-#game-footer { background-color: #0a0a0a; width: 100%; padding: 10px 0; text-align: center; border-top: 1px solid #333; z-index: 100; font-size: 14px; color: #888; display: flex; flex-direction: column; align-items: center; }
+#game-footer { background-color: #0a0a0a; width: 100%; padding: 10px 0; text-align: center; border-top: 1px solid #333; z-index: 100; font-size: 14px; color: #888; display: flex; flex-direction: column; align-items: center; transition: opacity 0.5s; }
 
 .footer-text { margin: 0 0 5px 0; width: 100%; text-align: center; }
 
@@ -211,7 +211,7 @@ input[type="text"] { padding: 1.5vmin; font-size: 3vmin; border-radius: 1vmin; b
 
 <div id="setup-screen" class="overlay hidden">
 
-<h2>SILAHKAN PILIH PESAWAT KOMANDAN!</h2>
+<h2>PILIH PESAWAT KOMANDAN</h2>
 
 <div class="ship-selector">
 
@@ -549,13 +549,15 @@ this.canvas = document.getElementById('gameCanvas');
 
 this.ctx = this.canvas.getContext('2d');
 
+// Canvas tetap 1280x720 internal resolution
+
 this.width = 1280; this.height = 720;
 
 this.canvas.width = this.width; this.canvas.height = this.height;
 
 this.images = {};
 
-this.state = 'LOADING'; // LOADING, SPLASH, SETUP, LEVEL_INTRO, SPACE_ROAM, ENTRY_QUIZ, AMMO_QUIZ, BATTLE, LEVEL_COMPLETE, VICTORY, GAMEOVER
+this.state = 'LOADING';
 
 // Entities
 
@@ -569,11 +571,11 @@ thrust: false, rotateLeft: false, rotateRight: false,
 
 moveUp: false, moveDown: false, moveLeft: false, moveRight: false, shooting: false,
 
-fuel: 100, displayedFuel: 100, // For animation
+fuel: 100, displayedFuel: 100, 
 
 score: 0, 
 
-hp: 100, displayedHp: 100, // For animation
+hp: 100, displayedHp: 100,
 
 ammo: 0, name: "", shipType: "",
 
@@ -595,7 +597,7 @@ this.enemyBullets = [];
 
 this.enemies = []; 
 
-this.bonusItems = []; // Health packs
+this.bonusItems = []; 
 
 this.boss = null;
 
@@ -603,8 +605,6 @@ this.explosions = [];
 
 this.bgScrollX = 0;
 
-
-// Battle Spawn Control
 
 this.bossTimer = 0;
 
@@ -614,8 +614,6 @@ this.bonusSpawnedAlien = 0;
 
 this.bonusSpawnedBoss = 0;
 
-
-// Quiz Vars
 
 this.quizSet = [];
 
@@ -671,6 +669,21 @@ changeState(state) {
 this.state = state;
 
 document.querySelectorAll('.overlay, #controls-space, #controls-battle').forEach(e => e.classList.add('hidden'));
+
+
+// Footer Logic
+
+const footer = document.getElementById('game-footer');
+
+if(state === 'SPLASH' || state === 'SETUP') {
+
+footer.classList.remove('hidden');
+
+} else {
+
+footer.classList.add('hidden');
+
+}
 
 
 if (state === 'SPLASH') document.getElementById('splash-screen').classList.remove('hidden');
@@ -836,8 +849,6 @@ this.player.vx=0; this.player.vy=0; this.player.angle=0;
 
 this.player.immuneUntil = Date.now() + 3000;
 
-// Spawn Planet safely away from center
-
 let px, py, dist;
 
 do {
@@ -897,16 +908,12 @@ this.update(); this.draw(); requestAnimationFrame(()=>this.loop());
 
 update() {
 
-// Common effects
-
 this.explosions.forEach(e => { e.r+=2; e.a-=0.05; });
 
 this.explosions = this.explosions.filter(e => e.a > 0);
 
 this.player.flashTick++;
 
-
-// Lerp visual values
 
 this.player.displayedFuel += (this.player.fuel - this.player.displayedFuel) * 0.1;
 
@@ -934,15 +941,13 @@ else if (this.state === 'SPACE_ROAM' || this.state === 'ENTRY_QUIZ') this.drawSp
 
 else if (this.state === 'BATTLE') this.drawBattle();
 
-// FIX: Draw background on Overlay Screens
+// Fix: Draw background for overlay states
 
 else if (this.state === 'GAMEOVER' || this.state === 'VICTORY' || this.state === 'LEVEL_COMPLETE') {
 
 if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
 
 }
-
-// Explosion Overlay
 
 this.explosions.forEach(e => {
 
@@ -960,8 +965,6 @@ this.ctx.restore();
 // --- LOGIC: SPACE ROAM ---
 
 updateSpace() {
-
-// Physics
 
 if(this.player.rotateLeft) this.player.angle -= 0.08;
 
@@ -1060,11 +1063,13 @@ this.drawPlayer(true);
 
 // HUD
 
-this.drawBar(20, 20, 250, 20, this.player.displayedFuel, 100, '#ff9900', 'FUEL');
+this.drawBar(40, 20, 300, 25, this.player.displayedFuel, 100, '#ff9900', 'FUEL');
 
 this.ctx.fillStyle='white'; this.ctx.textAlign='left';
 
-this.ctx.fillText(`Score: ${this.player.score}`, 20, 65);
+this.ctx.font='bold 24px Segoe UI';
+
+this.ctx.fillText(`Score: ${this.player.score}`, 40, 80);
 
 }
 
@@ -1088,10 +1093,6 @@ this.ctx.strokeRect(x, y, w, h);
 
 const fillW = Math.max(0, (val / max) * w);
 
-this.ctx.fillStyle = color;
-
-// Add Gradient
-
 const grd = this.ctx.createLinearGradient(x, y, x, y+h);
 
 grd.addColorStop(0, color);
@@ -1107,11 +1108,11 @@ this.ctx.fillRect(x, y, fillW, h);
 
 this.ctx.fillStyle = 'white';
 
-this.ctx.font = 'bold 14px Segoe UI';
+this.ctx.font = 'bold 16px Segoe UI';
 
 this.ctx.textAlign = 'center';
 
-this.ctx.fillText(`${label} ${Math.floor(val)}%`, x + w/2, y + h - 5);
+this.ctx.fillText(`${label} ${Math.floor(val)}%`, x + w/2, y + h - 6);
 
 }
 
@@ -1147,15 +1148,15 @@ spawnExplosion(x,y) { this.explosions.push({x,y,r:10,a:1}); }
 
 spawnBigExplosion(x,y) {
 
-for(let i=0; i<15; i++) {
+for(let i=0; i<20; i++) {
 
 this.explosions.push({
 
-x: x + (Math.random()-0.5)*100,
+x: x + (Math.random()-0.5)*150,
 
-y: y + (Math.random()-0.5)*100,
+y: y + (Math.random()-0.5)*150,
 
-r: 20 + Math.random()*30,
+r: 20 + Math.random()*40,
 
 a: 1.0
 
@@ -1379,7 +1380,7 @@ this.player.ammo--;
 
 updateBattle() {
 
-if (this.state !== 'BATTLE') return; // Stop updates if level ended
+if (this.state !== 'BATTLE') return; 
 
 
 this.bgScrollX -= 2;
@@ -1430,8 +1431,6 @@ this.enemyBullets.splice(i,1);
 
 // BONUS ITEM LOGIC
 
-// Alien Phase: Spawn 2x
-
 if(!this.boss && this.bonusSpawnedAlien < 2) {
 
 if((this.bossTimer === 300 && this.bonusSpawnedAlien === 0) || (this.bossTimer === 700 && this.bonusSpawnedAlien === 1)) {
@@ -1443,8 +1442,6 @@ this.bonusSpawnedAlien++;
 }
 
 }
-
-// Boss Phase: Spawn 2x
 
 if(this.boss && this.bonusSpawnedBoss < 2) {
 
@@ -1461,8 +1458,6 @@ this.bonusSpawnedBoss++;
 }
 
 
-// Update Bonus Items
-
 for(let i=this.bonusItems.length-1; i>=0; i--) {
 
 let b = this.bonusItems[i];
@@ -1475,7 +1470,7 @@ else if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, b.x,
 
 this.player.hp = Math.min(100, this.player.hp + 20); // Heal
 
-this.player.ammo += 15; // ADD AMMO TOO
+this.player.ammo += 15; // ADD AMMO
 
 this.player.score += 50;
 
@@ -1485,9 +1480,6 @@ this.bonusItems.splice(i,1);
 
 }
 
-
-
-// Spawn Aliens
 
 this.bossTimer++;
 
@@ -1517,7 +1509,7 @@ shootTimer: Math.random()*100
 
 } else if(!this.boss && this.bossTimer >= 1000 && this.enemies.length === 0) {
 
-// BOSS NERF: Easier
+// BOSS NERF: 15 + level*5 HP
 
 const bossMaxHp = 15 + (this.level * 5); 
 
@@ -1728,15 +1720,11 @@ this.ctx.drawImage(this.images.alien, e.x-e.w/2, e.y-e.h/2, e.w, e.h);
 });
 
 
-// Draw Bonus
-
 this.bonusItems.forEach(b => {
 
 this.ctx.fillStyle = '#fff';
 
 this.ctx.beginPath();
-
-// Draw a Medkit box
 
 this.ctx.fillRect(b.x-15, b.y-15, 30, 30);
 
@@ -1790,21 +1778,21 @@ this.ctx.beginPath(); this.ctx.arc(eb.x, eb.y, 8, 0, Math.PI*2); this.ctx.fill()
 });
 
 
-// HUD Battle
-
-this.drawBar(20, 20, 250, 20, this.player.displayedHp, 100, '#ff0000', 'HP');
+this.drawBar(40, 20, 300, 25, this.player.displayedHp, 100, '#ff0000', 'HP');
 
 this.ctx.fillStyle = 'white'; this.ctx.textAlign='left';
 
-this.ctx.fillText(`Ammo: ${this.player.ammo}`, 20, 65);
+this.ctx.font='bold 24px Segoe UI';
 
-this.ctx.fillText(`Score: ${this.player.score}`, 20, 90);
+this.ctx.fillText(`Ammo: ${this.player.ammo}`, 40, 80);
+
+this.ctx.fillText(`Score: ${this.player.score}`, 40, 110);
 
 if(this.player.reloadUsed && this.player.ammo < 10) {
 
-this.ctx.fillStyle = 'red'; this.ctx.font='bold 16px Segoe UI';
+this.ctx.fillStyle = 'red'; this.ctx.font='bold 20px Segoe UI';
 
-this.ctx.fillText(`BAHAYA: AMUNISI KOSONG (TIDAK ADA RELOAD)`, 20, 120);
+this.ctx.fillText(`BAHAYA: AMUNISI KOSONG (TIDAK ADA RELOAD)`, 40, 140);
 
 }
 
@@ -1813,19 +1801,21 @@ this.ctx.fillText(`BAHAYA: AMUNISI KOSONG (TIDAK ADA RELOAD)`, 20, 120);
 
 finishLevel() {
 
-// Triggered when Boss HP <= 0
+// Spawn big explosion first
 
 this.spawnBigExplosion(this.boss.x, this.boss.y);
 
 this.boss = null;
 
-// Switch to LEVEL_COMPLETE state immediately to stop updateBattle logic (prevent glitches)
+// Immediately switch state to prevent glitch/update loop
+
+// Wait 1.5s for explosion effect then show popup
 
 setTimeout(() => {
 
 this.changeState('LEVEL_COMPLETE');
 
-}, 1000); // Small delay to see explosion
+}, 1500); 
 
 }
 
