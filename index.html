@@ -421,6 +421,9 @@
                 this.quizTimer = 0;
                 this.quizInterval = null;
                 this.isReloadQuiz = false;
+                
+                // Cutscene variables
+                this.cutsceneTimer = 0;
 
                 this.setupInputs();
                 this.loadAssets();
@@ -460,6 +463,9 @@
                     document.getElementById('controls-space').classList.remove('hidden');
                 }
                 else if (state === 'ENTRY_QUIZ') this.startEntryQuiz();
+                else if (state === 'CUTSCENE') {
+                   // No overlay for cutscene, just pure canvas drawing
+                }
                 else if (state === 'AMMO_QUIZ') this.showAmmoIntro();
                 else if (state === 'BATTLE') {
                     document.getElementById('controls-battle').classList.remove('hidden');
@@ -578,6 +584,7 @@
                 this.player.displayedHp += (this.player.hp - this.player.displayedHp) * 0.1;
 
                 if (this.state === 'SPACE_ROAM') this.updateSpace();
+                else if (this.state === 'CUTSCENE') this.updateCutscene();
                 else if (this.state === 'BATTLE') this.updateBattle();
             }
 
@@ -588,6 +595,7 @@
                     if(this.images.bgSpace) this.ctx.drawImage(this.images.bgSpace, 0, 0, this.width, this.height);
                 }
                 else if (this.state === 'SPACE_ROAM' || this.state === 'ENTRY_QUIZ') this.drawSpace();
+                else if (this.state === 'CUTSCENE' || this.state === 'AMMO_QUIZ') this.drawCutscene();
                 else if (this.state === 'BATTLE') this.drawBattle();
                 // Fix: Draw background for overlay states
                 else if (this.state === 'GAMEOVER' || this.state === 'VICTORY' || this.state === 'LEVEL_COMPLETE') {
@@ -758,13 +766,122 @@
                 setTimeout(() => {
                     this.quizIndex++;
                     if(this.quizIndex >= 10) {
-                        if(this.quizCorrect >= 5) this.changeState('AMMO_QUIZ');
+                        if(this.quizCorrect >= 5) this.startCutscene(); // Changed from changeState('AMMO_QUIZ')
                         else this.gameOver("Gagal Izin Mendarat. Nilai Kuis Kurang dari 5. Belajar lagi ya!");
                     } else {
                         this.renderEntryQuestion();
                     }
                 }, 1000); // 1 detik delay
             }
+
+            // --- PHASE 2: CUTSCENE ---
+            startCutscene() {
+                this.changeState('CUTSCENE');
+                this.cutsceneTimer = 0;
+            }
+
+            updateCutscene() {
+                this.cutsceneTimer++;
+                // 5 seconds animation (300 frames at 60fps)
+                if(this.cutsceneTimer > 300) {
+                    this.changeState('AMMO_QUIZ');
+                }
+            }
+
+            drawCutscene() {
+                // Draw space background
+                if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
+
+                // Animation Progress (0.0 to 1.0)
+                // If state is AMMO_QUIZ, freeze animation at end state (1.0)
+                let progress = Math.min(1, this.cutsceneTimer / 300);
+                if(this.state === 'AMMO_QUIZ') progress = 1;
+                
+                // Cinematic Easing: Smooth start and end
+                const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+
+                // 1. Draw Planet (Cinematic Zoom & Parallax)
+                const pName = LEVEL_NAMES[this.level];
+                const pImg = this.images['p'+pName];
+                if(pImg) {
+                    // Planet grows significantly
+                    const startScale = 0.4; 
+                    const endScale = 1.3;
+                    const currentScale = startScale + (endScale - startScale) * ease;
+                    
+                    // Parallax: Planet moves slightly Left as ship moves Right
+                    const startX = this.width * 0.6;
+                    const endX = this.width * 0.45;
+                    const currentX = startX + (endX - startX) * ease;
+
+                    const w = 400 * currentScale;
+                    const h = 400 * currentScale;
+                    
+                    // Draw Planet Centered vertically
+                    this.ctx.drawImage(pImg, currentX - w/2, (this.height/2) - h/2, w, h);
+                }
+
+                // 2. Draw Ship (Fly in from LEFT to RIGHT)
+                const shipImg = this.images[this.player.shipType];
+                if(shipImg) {
+                    // Start off-screen Left (-300), End at Center (width/2)
+                    const startX = -300; 
+                    const endX = (this.width/2);
+                    const currentX = startX + (endX - startX) * ease;
+                    
+                    // Floating effect (Sine wave)
+                    const floatY = Math.sin(this.cutsceneTimer * 0.05) * 15;
+                    const centerY = this.height/2 + floatY;
+
+                    const shipSize = 180; // Larger for cinematic feel
+
+                    this.ctx.save();
+                    this.ctx.translate(currentX, centerY);
+                    // HAPUS ROTASI 180 DERAJAT (Agar orientasi kembali ke asli/kanan)
+                    this.ctx.rotate(0); 
+                    this.ctx.drawImage(shipImg, -shipSize/2, -shipSize/2, shipSize, shipSize);
+
+                    // Engine Trail (Sesuaikan ke posisi negatif X agar muncul di belakang/kiri)
+                    this.ctx.globalCompositeOperation = 'lighter';
+                    this.ctx.fillStyle = `rgba(0, 200, 255, ${0.6 + Math.random()*0.4})`;
+                    
+                    this.ctx.beginPath();
+                    // Karena rotasi 0, Sumbu X positif ke KANAN.
+                    // Pesawat menghadap KANAN.
+                    // Trail harus di KIRI (X Negatif).
+                    this.ctx.moveTo(-40, -10); // Belakang badan pesawat
+                    this.ctx.lineTo(-180 - (Math.random()*60), 0); // Memanjang ke belakang (kiri)
+                    this.ctx.lineTo(-40, 10); // Lebar trail
+                    this.ctx.fill();
+                    
+                    this.ctx.restore();
+                }
+
+                // 3. Cinematic Black Bars & Text
+                if(this.state === 'CUTSCENE') {
+                    // Top Bar
+                    this.ctx.fillStyle = "black";
+                    this.ctx.fillRect(0, 0, this.width, this.height * 0.12);
+                    // Bottom Bar
+                    this.ctx.fillRect(0, this.height * 0.88, this.width, this.height * 0.12);
+
+                    // Text
+                    this.ctx.fillStyle = "#00ccff";
+                    this.ctx.font = "bold 3vh Segoe UI"; 
+                    this.ctx.textAlign = "center";
+                    this.ctx.shadowColor = "rgba(0, 150, 255, 0.5)";
+                    this.ctx.shadowBlur = 10;
+                    
+                    const text = "MENDEKATI ATMOSFER " + pName.toUpperCase();
+                    this.ctx.fillText(text, this.width/2, this.height * 0.94);
+                    
+                    this.ctx.font = "italic 2vh Segoe UI";
+                    this.ctx.fillStyle = "#aaa";
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.fillText("Persiapkan Diri untuk Pendaratan...", this.width/2, this.height * 0.97);
+                }
+            }
+
 
             // --- PHASE 3: AMMO QUIZ ---
             showAmmoIntro() {
