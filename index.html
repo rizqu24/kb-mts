@@ -103,6 +103,11 @@
             pointer-events: none; z-index: 20; 
         }
         .touch-group { pointer-events: auto; display: flex; gap: 2vh; }
+        /* Style khusus untuk Battle Mode agar tombol tembak di kanan */
+        #controls-battle #touch-controls {
+            justify-content: flex-end; /* Dorong ke kanan */
+        }
+
         .t-btn { 
             width: 14vh; height: 14vh; /* Tombol diperbesar */
             background: rgba(255, 255, 255, 0.15); 
@@ -159,7 +164,7 @@
         <div id="game-area">
             <canvas id="gameCanvas"></canvas>
 
-            <!-- CONTROLS: SPACE MODE -->
+            <!-- CONTROLS: SPACE MODE (Masih pakai D-Pad karena untuk rotasi) -->
             <div id="controls-space" class="hidden">
                 <div id="touch-controls">
                     <div class="touch-group"><div class="t-btn" id="btn-left">↺</div><div class="t-btn" id="btn-right">↻</div></div>
@@ -167,20 +172,17 @@
                 </div>
             </div>
 
-            <!-- CONTROLS: BATTLE MODE -->
+            <!-- CONTROLS: BATTLE MODE (Tombol arah DIHILANGKAN, hanya tombol tembak) -->
             <div id="controls-battle" class="hidden">
                 <div id="touch-controls">
-                    <div class="touch-group">
-                        <div class="t-btn" id="btn-battle-left">◀</div>
-                        <div class="d-pad-col">
-                            <div class="t-btn" id="btn-up">▲</div>
-                            <div class="t-btn" id="btn-down">▼</div>
-                        </div>
-                        <div class="t-btn" id="btn-battle-right">▶</div>
-                    </div>
+                    <!-- Tombol arah dihapus -->
                     <div class="touch-group">
                         <div class="t-btn btn-shoot" id="btn-fire" style="background: rgba(255,0,0,0.3); border-color: red;">🔫</div>
                     </div>
+                </div>
+                <!-- Petunjuk untuk kontrol sentuh -->
+                <div style="position: absolute; top: 5%; left: 0; width: 100%; text-align: center; pointer-events: none; opacity: 0.7;">
+                    <p style="font-size: 2.5vh; color: #ffff00; text-shadow: 1px 1px 2px black;">Geser Layar untuk Bergerak • Tekan Tombol 🔫 untuk Menembak</p>
                 </div>
             </div>
 
@@ -396,7 +398,11 @@
                     hp: 100, displayedHp: 100,
                     ammo: 0, name: "", shipType: "",
                     radius: 25, immuneUntil: 0, flashTick: 0,
-                    reloadUsed: false
+                    reloadUsed: false,
+                    // DRAG CONTROL PROPS
+                    isDragging: false,
+                    dragOffsetX: 0,
+                    dragOffsetY: 0
                 };
                 
                 this.level = 0; 
@@ -496,8 +502,73 @@
                 };
                 bind('btn-left', 'rotateLeft'); bind('btn-right', 'rotateRight'); bind('btn-thrust', 'thrust');
                 bind('btn-up', 'moveUp'); bind('btn-down', 'moveDown'); 
-                bind('btn-battle-left', 'moveLeft'); bind('btn-battle-right', 'moveRight');
+                
+                // D-Pad buttons are removed in Battle Mode, but logic remains for keyboard fallback
+                // Only btn-fire exists in battle UI now
                 bind('btn-fire', 'shooting');
+
+                // --- TOUCH DRAG LISTENERS FOR CANVAS ---
+                // Mencegah scroll default saat menyentuh canvas
+                this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), {passive: false});
+                this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), {passive: false});
+                this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), {passive: false});
+            }
+
+            // --- TOUCH LOGIC FOR BATTLE MODE ---
+            getCanvasPos(evt) {
+                const rect = this.canvas.getBoundingClientRect();
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                const touch = evt.touches[0];
+                return {
+                    x: (touch.clientX - rect.left) * scaleX,
+                    y: (touch.clientY - rect.top) * scaleY
+                };
+            }
+
+            handleTouchStart(e) {
+                if(this.state !== 'BATTLE') return;
+                
+                const pos = this.getCanvasPos(e);
+                // Hit detection with generous radius (100px) so finger doesn't have to be pixel perfect
+                const dist = Math.hypot(pos.x - this.player.x, pos.y - this.player.y);
+                
+                if(dist < 100) {
+                    this.player.isDragging = true;
+                    // Calculate offset so the ship doesn't snap to finger center immediately
+                    this.player.dragOffsetX = this.player.x - pos.x;
+                    this.player.dragOffsetY = this.player.y - pos.y;
+                    
+                    // DISABLE AUTO FIRE: Shooting now requires manual button press
+                    // this.player.shooting = true; 
+                }
+            }
+
+            handleTouchMove(e) {
+                if(this.state !== 'BATTLE' || !this.player.isDragging) return;
+                e.preventDefault(); // Prevent scrolling
+
+                const pos = this.getCanvasPos(e);
+                
+                // Update player position with offset
+                let newX = pos.x + this.player.dragOffsetX;
+                let newY = pos.y + this.player.dragOffsetY;
+
+                // Clamping (Keep player inside screen)
+                // Left limit: 50, Right limit: this.width/2
+                if(newX < 50) newX = 50;
+                if(newX > this.width/2) newX = this.width/2;
+                if(newY < 50) newY = 50;
+                if(newY > this.height-50) newY = this.height-50;
+
+                this.player.x = newX;
+                this.player.y = newY;
+            }
+
+            handleTouchEnd(e) {
+                if(this.state !== 'BATTLE') return;
+                this.player.isDragging = false;
+                // this.player.shooting = false; // Not needed as auto-fire is off
             }
 
             handleKey(key, down) {
@@ -988,10 +1059,14 @@
                 if(this.bgScrollX <= -this.width) this.bgScrollX = 0;
 
                 const speed = 7;
+                // KEYBOARD CONTROLS (tetap ada)
                 if(this.player.moveUp && this.player.y > 50) this.player.y -= speed;
                 if(this.player.moveDown && this.player.y < this.height-50) this.player.y += speed;
                 if(this.player.moveLeft && this.player.x > 50) this.player.x -= speed;
                 if(this.player.moveRight && this.player.x < this.width/2) this.player.x += speed;
+
+                // TOUCH CONTROL (AUTOMATICALLY UPDATES PLAYER.X/Y IN TOUCH HANDLER)
+                // Logic auto-fire saat drag dihapus agar manual
 
                 for(let i=this.bullets.length-1; i>=0; i--) {
                     let b = this.bullets[i];
