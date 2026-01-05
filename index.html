@@ -1,1880 +1,1144 @@
 <!DOCTYPE html>
-
 <html lang="id">
-
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Komandan Bintang: Misi Tata Surya - Battle Edition</title>
+    <style>
+        /* --- CSS: RESET & UTILITIES --- */
+        :root {
+            --vh: 1vh; /* Variable untuk tinggi layar aktual */
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+        
+        body, html { 
+            margin: 0; padding: 0; 
+            width: 100vw; 
+            /* Gunakan tinggi dinamis hasil kalkulasi JS untuk menghindari Address Bar */
+            height: 100vh; /* Fallback */
+            height: calc(var(--vh, 1vh) * 100); 
+            background-color: #050505; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+        }
 
-<meta charset="UTF-8">
+        /* --- LAYOUT WRAPPER --- */
+        #game-wrapper { 
+            position: relative;
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: #111; 
+            overflow: hidden;
+        }
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        /* --- GAME AREA (SAFE AREA SCALING) --- */
+        #game-area { 
+            position: relative; 
+            /* Logika: Lebar mengikuti layar, TAPI tinggi dibatasi rasio 16:9 */
+            width: 100%; 
+            max-width: 177.78vh; /* Fallback standard */
+            max-width: calc((var(--vh, 1vh) * 100) * 1.7778); /* Batas lebar berdasarkan tinggi aktual */
+            
+            /* Agar aspek rasio selalu 16:9 */
+            aspect-ratio: 16/9;
+            
+            background: #000; 
+            overflow: hidden; 
+            box-shadow: 0 0 50px rgba(0, 150, 255, 0.2); 
+            margin: auto;
+        }
 
-<title>Komandan Bintang: Misi Tata Surya - Battle Edition</title>
+        canvas { display: block; width: 100%; height: 100%; }
 
-<style>
+        /* --- UI OVERLAYS --- */
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.9); z-index: 10; transition: opacity 0.3s; padding: 2vmin; text-align: center; }
+        .hidden { display: none !important; }
+        #splash-screen { background: transparent !important; }
 
-/* --- CSS: RESET & UTILITIES --- */
+        /* TYPOGRAPHY RESPONSIVE (DIPERBESAR & JELAS) */
+        /* Menggunakan satuan vh agar font mengikuti tinggi layar */
+        h1 { font-size: 8vh; color: #00ccff; text-transform: uppercase; text-shadow: 0 0 10px #00ccff; margin-bottom: 2vh; }
+        h2 { font-size: 6vh; color: #ffcc00; margin-bottom: 2vh; }
+        h3 { font-size: 5vh; margin-bottom: 2vh; } /* Untuk judul Quiz/Level */
+        p { font-size: 3.5vh; color: #ddd; max-width: 90%; line-height: 1.4; margin-bottom: 2vh; }
+        
+        .btn { 
+            background: linear-gradient(180deg, #0055ff, #003399); border: 0.4vh solid #fff; color: white; 
+            padding: 2vh 5vh; font-size: 4vh; font-weight: bold; border-radius: 2vh; cursor: pointer; 
+            margin-top: 2vh; box-shadow: 0 0 15px #0055ff; white-space: nowrap;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; }
+        .btn-shoot { background: linear-gradient(180deg, #ff0000, #990000); box-shadow: 0 0 15px #ff0000; }
 
-* { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+        /* SETUP SCREEN */
+        .ship-selector { display: flex; gap: 3vh; margin: 3vh 0; justify-content: center; width: 100%; }
+        .ship-option { width: 15vh; height: 15vh; border: 0.4vh solid transparent; border-radius: 2vh; background: rgba(255,255,255,0.1); cursor: pointer; padding: 1vh; }
+        .ship-option img { width: 100%; height: 100%; object-fit: contain; }
+        .ship-option.selected { border-color: #00ff00; background: rgba(0, 255, 0, 0.2); transform: scale(1.1); }
+        input[type="text"] { padding: 1.5vh; font-size: 4vh; border-radius: 2vh; border: none; text-align: center; margin: 2vh 0; width: 60%; }
 
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #050505; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; display: flex; flex-direction: column; }
+        /* QUIZ */
+        #quiz-container { background: rgba(10, 20, 40, 0.95); border: 0.5vh solid #00ccff; padding: 4vh; border-radius: 2vh; width: 90%; max-height: 90%; overflow-y: auto; }
+        .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 2vh; margin-top: 2vh; }
+        .quiz-btn { background: #333; border: 0.3vh solid #666; color: white; padding: 3vh; font-size: 3.2vh; cursor: pointer; border-radius: 1.5vh; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .quiz-btn:hover { background: #444; border-color: #999; }
+        
+        /* EFEK JAWABAN BENAR/SALAH */
+        .quiz-btn.correct { background: #00aa00 !important; border-color: #00ff00 !important; color: white !important; transform: scale(1.05); font-weight: bold; box-shadow: 0 0 15px #00ff00; }
+        .quiz-btn.wrong { background: #aa0000 !important; border-color: #ff0000 !important; color: white !important; opacity: 0.7; }
 
+        .quiz-status { display: flex; justify-content: space-around; width: 100%; margin-bottom: 2vh; font-size: 4vh; font-weight: bold; }
+        
+        /* TOUCH CONTROLS */
+        #touch-controls { 
+            position: absolute; bottom: 3vh; width: 100%; 
+            display: flex; justify-content: space-between; padding: 0 5vh; 
+            pointer-events: none; z-index: 20; 
+        }
+        .touch-group { pointer-events: auto; display: flex; gap: 2vh; }
+        .t-btn { 
+            width: 14vh; height: 14vh; /* Tombol diperbesar */
+            background: rgba(255, 255, 255, 0.15); 
+            border: 0.4vh solid rgba(255, 255, 255, 0.3); 
+            border-radius: 50%; 
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 6vh; color: white; 
+        }
+        .t-btn:active { background: rgba(255, 255, 255, 0.4); }
+        .d-pad-col { display: flex; flex-direction: column; gap: 1vh; justify-content: center; }
 
-/* --- LAYOUT --- */
+        /* LOADING & WARNING */
+        #loading-bar-container { width: 50%; height: 3vh; background: #333; border-radius: 1.5vh; margin-top: 2vh; overflow: hidden; }
+        #loading-bar { width: 0%; height: 100%; background: #00ccff; transition: width 0.2s; }
+        
+        #portrait-warning { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #000; z-index: 9999; flex-direction: column; 
+            justify-content: center; align-items: center; text-align: center; 
+        }
+        @media (orientation: portrait) { #portrait-warning { display: flex; } }
 
-#game-wrapper { flex: 1; display: flex; justify-content: center; align-items: center; background: #111; width: 100%; position: relative; }
+        /* FOOTER (Absolute Bottom of Game Area Wrapper) */
+        #game-footer {
+            position: absolute;
+            bottom: 0; width: 100%;
+            background-color: rgba(10, 10, 10, 0.9);
+            padding: 1.5vh 0;
+            text-align: center;
+            border-top: 1px solid #333;
+            z-index: 100;
+            font-size: 2vh;
+            color: #888;
+            display: flex; flex-direction: column; align-items: center;
+            transition: opacity 0.5s;
+        }
+        .footer-text { margin: 0 0 1vh 0; width: 100%; text-align: center; font-size: 2vh; }
+        .social-icons { display: flex; justify-content: center; gap: 2vh; margin-top: 0.5vh; }
+        .social-link { width: 5vh; height: 5vh; border-radius: 50%; background: #222; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .social-link:hover { transform: scale(1.1); background: #444; }
+        .social-link svg { width: 3vh; height: 3vh; fill: white; }
 
-#game-area { position: relative; width: 100%; max-width: 177.78vh; aspect-ratio: 16/9; background: #000; overflow: hidden; box-shadow: 0 0 50px rgba(0, 150, 255, 0.2); }
+        /* ANIMATIONS */
+        .level-box { background: rgba(0, 20, 50, 0.95); border: 2px solid #00ccff; padding: 4%; border-radius: 20px; max-width: 80%; animation: popIn 0.5s ease; }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-canvas { display: block; width: 100%; height: 100%; }
-
-
-/* --- UI OVERLAYS --- */
-
-.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.9); z-index: 10; transition: opacity 0.3s; padding: 2vmin; text-align: center; }
-
-.hidden { display: none !important; }
-
-#splash-screen { background: transparent !important; }
-
-
-/* TYPOGRAPHY & BUTTONS */
-
-h1 { font-size: 6vmin; color: #00ccff; text-transform: uppercase; text-shadow: 0 0 10px #00ccff; margin-bottom: 2vmin; }
-
-h2 { font-size: 4vmin; color: #ffcc00; margin-bottom: 2vmin; }
-
-p { font-size: 2.5vmin; color: #ddd; max-width: 80%; line-height: 1.5; margin-bottom: 2vmin; }
-
-.btn { background: linear-gradient(180deg, #0055ff, #003399); border: 0.3vmin solid #fff; color: white; padding: 1.5vmin 4vmin; font-size: 3vmin; font-weight: bold; border-radius: 1vmin; cursor: pointer; margin-top: 2vmin; box-shadow: 0 0 15px #0055ff; }
-
-.btn:active { transform: scale(0.95); }
-
-.btn:disabled { background: #555; cursor: not-allowed; box-shadow: none; }
-
-.btn-shoot { background: linear-gradient(180deg, #ff0000, #990000); box-shadow: 0 0 15px #ff0000; }
-
-
-/* SPECIFIC UI ELEMENTS */
-
-.ship-selector { display: flex; gap: 2vmin; margin: 2vmin 0; }
-
-.ship-option { width: 12vmin; height: 12vmin; border: 0.3vmin solid transparent; border-radius: 1vmin; background: rgba(255,255,255,0.1); cursor: pointer; padding: 1vmin; }
-
-.ship-option img { width: 100%; height: 100%; object-fit: contain; }
-
-.ship-option.selected { border-color: #00ff00; background: rgba(0, 255, 0, 0.2); transform: scale(1.1); }
-
-input[type="text"] { padding: 1.5vmin; font-size: 3vmin; border-radius: 1vmin; border: none; text-align: center; margin: 2vmin 0; width: 50%; }
-
-
-/* QUIZ STYLES */
-
-#quiz-container { background: rgba(10, 20, 40, 0.95); border: 0.5vmin solid #00ccff; padding: 4vmin; border-radius: 2vmin; width: 75%; max-height: 90%; overflow-y: auto; }
-
-.quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 2vmin; margin-top: 2vmin; }
-
-.quiz-btn { background: #333; border: 0.2vmin solid #666; color: white; padding: 2vmin; font-size: 2.2vmin; cursor: pointer; border-radius: 1vmin; transition: background 0.2s; }
-
-.quiz-btn:hover { background: #444; border-color: #999; }
-
-.quiz-status { display: flex; justify-content: space-around; width: 100%; margin-bottom: 2vmin; font-size: 3vmin; font-weight: bold; }
-
-/* TOUCH CONTROLS */
-
-#touch-controls { position: absolute; bottom: 2vmin; width: 100%; display: flex; justify-content: space-between; padding: 0 4vmin; pointer-events: none; z-index: 20; }
-
-.touch-group { pointer-events: auto; display: flex; gap: 2vmin; }
-
-.t-btn { width: 12vmin; height: 12vmin; background: rgba(255, 255, 255, 0.2); border: 0.3vmin solid rgba(255, 255, 255, 0.5); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 5vmin; color: white; margin-right: 1vmin; }
-
-.t-btn:active { background: rgba(255, 255, 255, 0.5); }
-
-.d-pad-col { display: flex; flex-direction: column; gap: 1vmin; justify-content: center; }
-
-
-/* ANIMATIONS */
-
-.level-box { background: rgba(0, 20, 50, 0.95); border: 2px solid #00ccff; padding: 4vmin; border-radius: 2vmin; max-width: 80%; animation: popIn 0.5s ease; }
-
-@keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
-/* FOOTER */
-
-#game-footer { background-color: #0a0a0a; width: 100%; padding: 10px 0; text-align: center; border-top: 1px solid #333; z-index: 100; font-size: 14px; color: #888; display: flex; flex-direction: column; align-items: center; transition: opacity 0.5s; }
-
-.footer-text { margin: 0 0 5px 0; width: 100%; text-align: center; }
-
-.social-icons { display: flex; justify-content: center; gap: 15px; margin-top: 5px; }
-
-.social-link { width: 30px; height: 30px; border-radius: 50%; background: #222; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-
-.social-link:hover { transform: scale(1.1); background: #444; }
-
-.social-link svg { width: 18px; height: 18px; fill: white; }
-
-#loading-bar-container { width: 50%; height: 2vmin; background: #333; border-radius: 1vmin; margin-top: 2vmin; overflow: hidden; }
-
-#loading-bar { width: 0%; height: 100%; background: #00ccff; transition: width 0.2s; }
-
-#portrait-warning { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-
-@media (orientation: portrait) { #portrait-warning { display: flex; } }
-
-</style>
-
+    </style>
 </head>
-
 <body>
 
-
-<div id="portrait-warning"><h1>⚠️ PERHATIAN</h1><p>Mohon putar perangkat ke LANDSCAPE.</p></div>
-
-
-<div id="game-wrapper">
-
-<div id="game-area">
-
-<canvas id="gameCanvas"></canvas>
-
-
-<!-- CONTROLS: SPACE MODE -->
-
-<div id="controls-space" class="hidden">
-
-<div id="touch-controls">
-
-<div class="touch-group"><div class="t-btn" id="btn-left">↺</div><div class="t-btn" id="btn-right">↻</div></div>
-
-<div class="touch-group"><div class="t-btn" id="btn-thrust">🔥</div></div>
-
-</div>
-
-</div>
-
-
-<!-- CONTROLS: BATTLE MODE -->
-
-<div id="controls-battle" class="hidden">
-
-<div id="touch-controls">
-
-<div class="touch-group">
-
-<div class="t-btn" id="btn-battle-left">◀</div>
-
-<div class="d-pad-col">
-
-<div class="t-btn" id="btn-up">▲</div>
-
-<div class="t-btn" id="btn-down">▼</div>
-
-</div>
-
-<div class="t-btn" id="btn-battle-right">▶</div>
-
-</div>
-
-<div class="touch-group">
-
-<div class="t-btn btn-shoot" id="btn-fire" style="background: rgba(255,0,0,0.3); border-color: red;">🔫</div>
-
-</div>
-
-</div>
-
-</div>
-
-
-<!-- LOADING -->
-
-<div id="loading-screen" class="overlay">
-
-<h1>MEMUAT DATA KOSMIK...</h1>
-
-<div id="loading-bar-container"><div id="loading-bar"></div></div>
-
-</div>
-
-
-<!-- SPLASH -->
-
-<div id="splash-screen" class="overlay hidden">
-
-<div style="margin-top: 25vmin;"></div>
-
-<button class="btn" style="font-size: 4vmin;" onclick="game.changeState('SETUP')">MULAI MISI</button>
-
-</div>
-
-
-<!-- SETUP -->
-
-<div id="setup-screen" class="overlay hidden">
-
-<h2>PILIH PESAWAT KOMANDAN</h2>
-
-<div class="ship-selector">
-
-<div class="ship-option" onclick="game.selectShip(this, 'shipBlue')"><img id="preview-blue"></div>
-
-<div class="ship-option" onclick="game.selectShip(this, 'shipRed')"><img id="preview-red"></div>
-
-<div class="ship-option" onclick="game.selectShip(this, 'shipGold')"><img id="preview-gold"></div>
-
-<div class="ship-option" onclick="game.selectShip(this, 'shipGreen')"><img id="preview-green"></div>
-
-</div>
-
-<input type="text" id="player-name-input" placeholder="Nama Komandan..." maxlength="12">
-
-<button id="btn-start-game" class="btn" disabled onclick="game.startGame()">BERANGKAT!</button>
-
-</div>
-
-
-<!-- LEVEL INTRO -->
-
-<div id="level-intro-screen" class="overlay hidden">
-
-<div class="level-box">
-
-<h2 id="level-title-text">LEVEL 1 : MERKURIUS</h2>
-
-<p id="level-instruction-text">Jelajahi luar angkasa, hindari asteroid, dan temukan planet tujuan!</p>
-
-<button class="btn" onclick="game.startLevel()">LUNCURKAN!</button>
-
-</div>
-
-</div>
-
-
-<!-- LEVEL COMPLETE (POPUP SKOR) -->
-
-<div id="level-complete-screen" class="overlay hidden">
-
-<h1 style="color: #00ff00; font-size: 5vmin;">MISI BERHASIL!</h1>
-
-<p>Area Planet Telah Diamankan.</p>
-
-<p>Skor Saat Ini: <span id="lc-score" style="color: yellow; font-weight: bold;">0</span></p>
-
-<button class="btn" onclick="game.nextLevel()">LANJUT KE PLANET BERIKUTNYA</button>
-
-</div>
-
-
-<!-- QUIZ: ENTRY (5/10) -->
-
-<div id="entry-quiz-modal" class="overlay hidden">
-
-<div id="quiz-container">
-
-<div class="quiz-status">
-
-<span id="eq-progress">Soal: 1/10</span>
-
-<span id="eq-score" style="color: yellow;">Benar: 0</span>
-
-</div>
-
-<h3 style="color: #00ccff;">IZIN PENDARATAN</h3>
-
-<p id="eq-question" style="font-size: 3vmin; font-weight: bold; color: white;">?</p>
-
-<div class="quiz-options" id="eq-options"></div>
-
-</div>
-
-</div>
-
-
-<!-- QUIZ: AMMO / RELOAD -->
-
-<div id="ammo-intro-screen" class="overlay hidden">
-
-<h1>PLANET TERCAPAI!</h1>
-
-<p>Selamat datang di <span id="ammo-planet-name" style="color:yellow; font-weight:bold;">MARS</span>.</p>
-
-<p>Hancurkan alien dan Bos Musuh untuk mendapatkan data planet!</p>
-
-<p style="color: #00ccff;">JAWAB KUIS UNTUK MENDAPATKAN AMUNISI!</p>
-
-<button class="btn" onclick="game.startAmmoQuiz(false)">MULAI ISI AMUNISI</button>
-
-</div>
-
-
-<div id="ammo-quiz-modal" class="overlay hidden">
-
-<div id="quiz-container" style="border-color: #ff0000;">
-
-<div class="quiz-status">
-
-<span id="aq-timer" style="color: red;">Waktu: 15s</span>
-
-<span id="aq-ammo" style="color: yellow;">Amunisi: 0</span>
-
-</div>
-
-<h3 id="aq-title" style="color: #ff0000;">SUPLAI AMUNISI</h3>
-
-<p id="aq-question" style="font-size: 3vmin;">?</p>
-
-<div class="quiz-options" id="aq-options"></div>
-
-</div>
-
-</div>
-
-
-<!-- GAME OVER / VICTORY -->
-
-<div id="end-screen" class="overlay hidden">
-
-<h1 id="end-title">GAME OVER</h1>
-
-<p id="end-message">Pesan.</p>
-
-<p>Skor Akhir: <span id="end-score" style="color: yellow;">0</span></p>
-
-<button class="btn" onclick="location.reload()">MAIN LAGI</button>
-
-</div>
-
-
-</div>
-
-</div>
-
-
-<!-- FOOTER -->
-
-<div id="game-footer">
-
-<p class="footer-text">Game Design by @herisheroes 2026</p>
-
-<div class="social-icons">
-
-<a href="https://www.youtube.com/@herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
-
-<a href="https://www.tiktok.com/@herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg></a>
-
-<a href="https://www.instagram.com/herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
-
-</div>
-
-</div>
-
-
-<script>
-
-// --- ASSETS DATABASE ---
-
-const ASSETS_URL = 'https://raw.githubusercontent.com/rizqu24/kbmts/refs/heads/main/';
-
-const ASSETS = {
-
-bgSpace: ASSETS_URL + 'back0.png',
-
-bgGame: ASSETS_URL + 'back1.png',
-
-alien: ASSETS_URL + 'alienplane.png',
-
-// Planets
-
-pMerkurius: ASSETS_URL + '1merkurius.png', pVenus: ASSETS_URL + '2venus.png', pBumi: ASSETS_URL + '3bumi.png',
-
-pMars: ASSETS_URL + '4mars.png', pJupiter: ASSETS_URL + '5jupiter.png', pSaturnus: ASSETS_URL + '6saturnus.png',
-
-pUranus: ASSETS_URL + '7uranus.png', pNeptunus: ASSETS_URL + '8neptunus.png',
-
-// Asteroids
-
-ast1: ASSETS_URL + 'asteroid1.png', ast2: ASSETS_URL + 'asteroid2.png',
-
-// Ships
-
-shipBlue: ASSETS_URL + 'blueplane.png', shipRed: ASSETS_URL + 'redplane.png',
-
-shipGold: ASSETS_URL + 'goldplane.png', shipGreen: ASSETS_URL + 'greenplane.png',
-
-// Battle Backgrounds & Bosses (Level 1 to 8)
-
-bg1: ASSETS_URL + 'bg1.png', bos1: ASSETS_URL + 'bos1.png',
-
-bg2: ASSETS_URL + 'bg2.png', bos2: ASSETS_URL + 'bos2.png',
-
-bg3: ASSETS_URL + 'bg3.png', bos3: ASSETS_URL + 'bos3.png',
-
-bg4: ASSETS_URL + 'bg4.png', bos4: ASSETS_URL + 'bos4.png',
-
-bg5: ASSETS_URL + 'bg5.png', bos5: ASSETS_URL + 'bos5.png',
-
-bg6: ASSETS_URL + 'bg6.png', bos6: ASSETS_URL + 'bos6.png',
-
-bg7: ASSETS_URL + 'bg7.png', bos7: ASSETS_URL + 'bos7.png',
-
-bg8: ASSETS_URL + 'bg8.png', bos8: ASSETS_URL + 'bos8.png',
-
-};
-
-
-const LEVEL_NAMES = ["Merkurius", "Venus", "Bumi", "Mars", "Jupiter", "Saturnus", "Uranus", "Neptunus"];
-
-// --- DATABASE SOAL (50 Soal) ---
-
-const ALL_QUESTIONS = [
-
-{q:"Pusat tata surya kita adalah...", o:["Bumi","Matahari","Bulan","Mars"], a:1},
-
-{q:"Planet terdekat dari Matahari adalah...", o:["Venus","Merkurius","Bumi","Mars"], a:1},
-
-{q:"Planet yang memiliki cincin paling indah...", o:["Jupiter","Saturnus","Uranus","Neptunus"], a:1},
-
-{q:"Planet terbesar di tata surya...", o:["Bumi","Mars","Jupiter","Saturnus"], a:2},
-
-{q:"Planet yang disebut planet merah...", o:["Mars","Venus","Merkurius","Jupiter"], a:0},
-
-{q:"Satelit alami Bumi adalah...", o:["Titan","Europa","Bulan","Phobos"], a:2},
-
-{q:"Benda langit yang memiliki ekor...", o:["Asteroid","Meteor","Komet","Satelit"], a:2},
-
-{q:"Kumpulan bintang membentuk...", o:["Tata Surya","Galaksi","Rasi Bintang","Nebula"], a:2},
-
-{q:"Galaksi tempat kita tinggal...", o:["Andromeda","Bima Sakti","Triangulum","Sombrero"], a:1},
-
-{q:"Planet terpanas di tata surya...", o:["Merkurius","Venus","Mars","Bumi"], a:1},
-
-{q:"Planet pembuat kehidupan...", o:["Bumi","Mars","Venus","Jupiter"], a:0},
-
-{q:"Waktu revolusi Bumi adalah...", o:["24 jam","30 hari","365 hari","100 tahun"], a:2},
-
-{q:"Waktu rotasi Bumi adalah...", o:["24 jam","12 jam","1 tahun","1 bulan"], a:0},
-
-{q:"Peristiwa siang dan malam disebabkan...", o:["Revolusi Bumi","Rotasi Bumi","Gerhana","Gravitasi"], a:1},
-
-{q:"Planet terjauh dari Matahari...", o:["Uranus","Neptunus","Pluto","Saturnus"], a:1},
-
-{q:"Planet yang menggelinding (poros miring)...", o:["Uranus","Neptunus","Saturnus","Jupiter"], a:0},
-
-{q:"Satelit terbesar Saturnus...", o:["Titan","Io","Europa","Ganymede"], a:0},
-
-{q:"Satelit terbesar Jupiter...", o:["Titan","Ganymede","Callisto","Europa"], a:1},
-
-{q:"Batuan luar angkasa yang terbakar di atmosfer...", o:["Meteorit","Meteor","Meteoroid","Asteroid"], a:1},
-
-{q:"Batuan yang sampai ke tanah bumi...", o:["Meteor","Meteorit","Komet","Bintang"], a:1},
-
-{q:"Alat untuk melihat bintang...", o:["Mikroskop","Teleskop","Periskop","Stetoskop"], a:1},
-
-{q:"Bintang terdekat selain matahari...", o:["Sirius","Proxima Centauri","Vega","Betelgeuse"], a:1},
-
-{q:"Warna bintang paling panas...", o:["Merah","Kuning","Biru","Putih"], a:2},
-
-{q:"Gaya yang menahan planet mengelilingi matahari...", o:["Magnet","Gesek","Gravitasi","Pegas"], a:2},
-
-{q:"Planet kembaran Bumi...", o:["Mars","Venus","Merkurius","Neptunus"], a:1},
-
-{q:"Lapisan udara yang menyelimuti Bumi...", o:["Hidrosfer","Atmosfer","Lithosfer","Biosfer"], a:1},
-
-{q:"Gas terbanyak di Matahari...", o:["Oksigen","Helium","Hidrogen","Nitrogen"], a:2},
-
-{q:"Asteroid banyak ditemukan di antara...", o:["Mars & Jupiter","Bumi & Mars","Jupiter & Saturnus","Venus & Bumi"], a:0},
-
-{q:"Gerhana matahari terjadi saat...", o:["Bulan di tengah","Bumi di tengah","Matahari di tengah","Bintang sejajar"], a:0},
-
-{q:"Gerhana bulan terjadi saat...", o:["Bulan di tengah","Bumi di tengah","Matahari di tengah","Posisi acak"], a:1},
-
-{q:"Fase bulan saat tidak terlihat...", o:["Purnama","Sabit","Baru","Separuh"], a:2},
-
-{q:"Planet dalam adalah...", o:["Jupiter ke atas","Mars ke bawah","Saturnus","Uranus"], a:1},
-
-{q:"Planet luar adalah...", o:["Merkurius, Venus","Bumi, Mars","Jupiter s.d Neptunus","Bulan"], a:2},
-
-{q:"Benda langit yang memancarkan cahaya sendiri...", o:["Planet","Satelit","Bintang","Komet"], a:2},
-
-{q:"Arah terbit Matahari...", o:["Barat","Timur","Utara","Selatan"], a:1},
-
-{q:"Tahun Kabisat terjadi setiap...", o:["2 tahun","3 tahun","4 tahun","5 tahun"], a:2},
-
-{q:"Jumlah hari tahun Kabisat...", o:["365","366","360","350"], a:1},
-
-{q:"Bulan yang memiliki 29 hari saat Kabisat...", o:["Januari","Februari","Maret","April"], a:1},
-
-{q:"Musim di Indonesia...", o:["Panas & Dingin","Hujan & Kemarau","Semi & Gugur","Salju"], a:1},
-
-{q:"Penyebab perubahan musim...", o:["Rotasi Bumi","Revolusi Bumi","Rotasi Bulan","Revolusi Bulan"], a:1},
-
-{q:"Negara matahari terbit...", o:["Cina","Korea","Jepang","Indonesia"], a:2},
-
-{q:"Astronot pertama di bulan...", o:["Yuri Gagarin","Neil Armstrong","Buzz Aldrin","Michael Collins"], a:1},
-
-{q:"Lapisan matahari terluar...", o:["Inti","Korona","Fotosfer","Kromosfer"], a:1},
-
-{q:"Planet kerdil...", o:["Pluto","Mars","Bumi","Merkurius"], a:0},
-
-{q:"Rasi bintang penunjuk arah selatan...", o:["Pari (Crux)","Ursa Mayor","Orion","Scorpio"], a:0},
-
-{q:"Rasi bintang penunjuk arah utara...", o:["Pari","Ursa Mayor","Orion","Leo"], a:1},
-
-{q:"Kalender Masehi berdasarkan...", o:["Bulan","Matahari","Bintang","Pasang surut"], a:1},
-
-{q:"Kalender Hijriah berdasarkan...", o:["Bulan","Matahari","Bintang","Musim"], a:0},
-
-{q:"Pasang surut air laut disebabkan...", o:["Gravitasi Matahari","Gravitasi Bulan","Angin","Hujan"], a:1},
-
-{q:"Bentuk orbit planet...", o:["Lingkaran","Kotak","Elips","Segitiga"], a:2}
-
-];
-
-
-function getRandomQuestions(count) {
-
-const shuffled = [...ALL_QUESTIONS].sort(() => 0.5 - Math.random());
-
-return shuffled.slice(0, count);
-
-}
-
-
-// --- GAME ENGINE ---
-
-class Game {
-
-constructor() {
-
-this.canvas = document.getElementById('gameCanvas');
-
-this.ctx = this.canvas.getContext('2d');
-
-// Canvas tetap 1280x720 internal resolution
-
-this.width = 1280; this.height = 720;
-
-this.canvas.width = this.width; this.canvas.height = this.height;
-
-this.images = {};
-
-this.state = 'LOADING';
-
-// Entities
-
-this.player = {
-
-x: 0, y: 0, angle: 0, 
-
-vx: 0, vy: 0, 
-
-thrust: false, rotateLeft: false, rotateRight: false,
-
-moveUp: false, moveDown: false, moveLeft: false, moveRight: false, shooting: false,
-
-fuel: 100, displayedFuel: 100, 
-
-score: 0, 
-
-hp: 100, displayedHp: 100,
-
-ammo: 0, name: "", shipType: "",
-
-radius: 25, immuneUntil: 0, flashTick: 0,
-
-reloadUsed: false
-
-};
-
-this.level = 0; 
-
-this.planets = [];
-
-this.asteroids = [];
-
-this.bullets = [];
-
-this.enemyBullets = [];
-
-this.enemies = []; 
-
-this.bonusItems = []; 
-
-this.boss = null;
-
-this.explosions = [];
-
-this.bgScrollX = 0;
-
-
-this.bossTimer = 0;
-
-this.spawnEnemyTimer = 0;
-
-this.bonusSpawnedAlien = 0;
-
-this.bonusSpawnedBoss = 0;
-
-
-this.quizSet = [];
-
-this.quizIndex = 0;
-
-this.quizCorrect = 0;
-
-this.quizTimer = 0;
-
-this.quizInterval = null;
-
-this.isReloadQuiz = false;
-
-
-this.setupInputs();
-
-this.loadAssets();
-
-}
-
-
-async loadAssets() {
-
-const keys = Object.keys(ASSETS);
-
-let loaded = 0;
-
-const bar = document.getElementById('loading-bar');
-
-const promises = keys.map(key => new Promise(resolve => {
-
-const img = new Image();
-
-img.src = ASSETS[key];
-
-img.onload = () => { loaded++; bar.style.width = (loaded/keys.length*100)+'%'; this.images[key] = img; resolve(); };
-
-img.onerror = () => { console.log('Err load: '+key); this.images[key] = null; resolve(); };
-
-}));
-
-await Promise.all(promises);
-
-['blue','red','gold','green'].forEach(c => document.getElementById(`preview-${c}`).src = ASSETS[`ship${c.charAt(0).toUpperCase()+c.slice(1)}`]);
-
-setTimeout(() => { document.getElementById('loading-screen').classList.add('hidden'); this.changeState('SPLASH'); this.loop(); }, 500);
-
-}
-
-
-changeState(state) {
-
-this.state = state;
-
-document.querySelectorAll('.overlay, #controls-space, #controls-battle').forEach(e => e.classList.add('hidden'));
-
-
-// Footer Logic
-
-const footer = document.getElementById('game-footer');
-
-if(state === 'SPLASH' || state === 'SETUP') {
-
-footer.classList.remove('hidden');
-
-} else {
-
-footer.classList.add('hidden');
-
-}
-
-
-if (state === 'SPLASH') document.getElementById('splash-screen').classList.remove('hidden');
-
-else if (state === 'SETUP') document.getElementById('setup-screen').classList.remove('hidden');
-
-else if (state === 'LEVEL_INTRO') this.showLevelIntro();
-
-else if (state === 'SPACE_ROAM') {
-
-document.getElementById('controls-space').classList.remove('hidden');
-
-}
-
-else if (state === 'ENTRY_QUIZ') this.startEntryQuiz();
-
-else if (state === 'AMMO_QUIZ') this.showAmmoIntro();
-
-else if (state === 'BATTLE') {
-
-document.getElementById('controls-battle').classList.remove('hidden');
-
-if(!this.isReloadQuiz) this.initBattle();
-
-else this.isReloadQuiz = false;
-
-}
-
-else if (state === 'LEVEL_COMPLETE') {
-
-document.getElementById('level-complete-screen').classList.remove('hidden');
-
-document.getElementById('lc-score').innerText = this.player.score;
-
-}
-
-else if (state === 'GAMEOVER' || state === 'VICTORY') this.showEndScreen();
-
-}
-
-
-// --- INPUTS ---
-
-setupInputs() {
-
-window.addEventListener('keydown', e => this.handleKey(e.key, true));
-
-window.addEventListener('keyup', e => this.handleKey(e.key, false));
-
-const bind = (id, prop) => {
-
-const el = document.getElementById(id);
-
-if (!el) return;
-
-const fn = (v) => { 
-
-this.player[prop] = v; 
-
-if(prop === 'shooting' && v && this.state === 'BATTLE') this.fireBullet();
-
-};
-
-el.onmousedown = el.ontouchstart = (e) => { e.preventDefault(); fn(true); };
-
-el.onmouseup = el.ontouchend = (e) => { e.preventDefault(); fn(false); };
-
-};
-
-bind('btn-left', 'rotateLeft'); bind('btn-right', 'rotateRight'); bind('btn-thrust', 'thrust');
-
-bind('btn-up', 'moveUp'); bind('btn-down', 'moveDown'); 
-
-bind('btn-battle-left', 'moveLeft'); bind('btn-battle-right', 'moveRight');
-
-bind('btn-fire', 'shooting');
-
-}
-
-
-handleKey(key, down) {
-
-if(this.state === 'SPACE_ROAM') {
-
-if(key==='ArrowUp') this.player.thrust = down;
-
-if(key==='ArrowLeft') this.player.rotateLeft = down;
-
-if(key==='ArrowRight') this.player.rotateRight = down;
-
-} else if(this.state === 'BATTLE') {
-
-if(key==='ArrowUp') this.player.moveUp = down;
-
-if(key==='ArrowDown') this.player.moveDown = down;
-
-if(key==='ArrowLeft') this.player.moveLeft = down;
-
-if(key==='ArrowRight') this.player.moveRight = down;
-
-if(key===' ' && down && !this.player.shooting) this.fireBullet(); 
-
-if(key===' ') this.player.shooting = down;
-
-}
-
-if(this.state==='SETUP' && !down) this.checkStartReady();
-
-}
-
-
-selectShip(el, type) {
-
-document.querySelectorAll('.ship-option').forEach(e=>e.classList.remove('selected'));
-
-el.classList.add('selected'); this.player.shipType = type; this.checkStartReady();
-
-}
-
-checkStartReady() {
-
-const name = document.getElementById('player-name-input').value.trim();
-
-document.getElementById('btn-start-game').disabled = !(this.player.shipType && name);
-
-}
-
-startGame() {
-
-this.player.name = document.getElementById('player-name-input').value;
-
-this.level = 0; this.player.score = 0; this.player.fuel = 100;
-
-this.changeState('LEVEL_INTRO');
-
-}
-
-
-showLevelIntro() {
-
-document.getElementById('level-intro-screen').classList.remove('hidden');
-
-document.getElementById('level-title-text').innerText = `LEVEL ${this.level+1} : ${LEVEL_NAMES[this.level]}`;
-
-document.getElementById('level-instruction-text').innerHTML = 
-
-this.level === 0 ? "Halo Komandan! Kunjungi planet tujuan, jawab kuis izin mendarat, kumpulkan amunisi, dan kalahkan Alien!" : 
-
-`Target selanjutnya: <b>${LEVEL_NAMES[this.level]}</b>. Musuh semakin kuat!`;
-
-}
-
-
-startLevel() {
-
-this.player.fuel = 100;
-
-this.player.displayedFuel = 100;
-
-this.player.x = this.width/2; this.player.y = this.height/2; 
-
-this.player.vx=0; this.player.vy=0; this.player.angle=0;
-
-this.player.immuneUntil = Date.now() + 3000;
-
-let px, py, dist;
-
-do {
-
-px = Math.random() * (this.width - 200) + 100;
-
-py = Math.random() * (this.height - 200) + 100;
-
-dist = Math.hypot(px - this.width/2, py - this.height/2);
-
-} while(dist < 350);
-
-
-this.planets = [{
-
-id: 'p'+LEVEL_NAMES[this.level], img: this.images['p'+LEVEL_NAMES[this.level]],
-
-x: px, y: py,
-
-radius: 50, name: LEVEL_NAMES[this.level]
-
-}];
-
-// Reset asteroids
-
-this.asteroids = [];
-
-for(let i=0; i<6+this.level; i++) {
-
-this.asteroids.push({
-
-img: this.images[Math.random()>0.5?'ast1':'ast2'],
-
-x:Math.random()*this.width, y:Math.random()*this.height,
-
-vx:(Math.random()-0.5)*(2+this.level*0.3), vy:(Math.random()-0.5)*(2+this.level*0.3),
-
-radius:30+Math.random()*20, angle:0
-
-});
-
-}
-
-this.changeState('SPACE_ROAM');
-
-}
-
-
-// --- MAIN LOOP ---
-
-loop() {
-
-this.update(); this.draw(); requestAnimationFrame(()=>this.loop());
-
-}
-
-
-update() {
-
-this.explosions.forEach(e => { e.r+=2; e.a-=0.05; });
-
-this.explosions = this.explosions.filter(e => e.a > 0);
-
-this.player.flashTick++;
-
-
-this.player.displayedFuel += (this.player.fuel - this.player.displayedFuel) * 0.1;
-
-this.player.displayedHp += (this.player.hp - this.player.displayedHp) * 0.1;
-
-
-if (this.state === 'SPACE_ROAM') this.updateSpace();
-
-else if (this.state === 'BATTLE') this.updateBattle();
-
-}
-
-
-draw() {
-
-this.ctx.clearRect(0,0,this.width,this.height);
-
-if (this.state === 'SPLASH' || this.state === 'SETUP' || this.state === 'LEVEL_INTRO' || this.state === 'LOADING') {
-
-if(this.images.bgSpace) this.ctx.drawImage(this.images.bgSpace, 0, 0, this.width, this.height);
-
-}
-
-else if (this.state === 'SPACE_ROAM' || this.state === 'ENTRY_QUIZ') this.drawSpace();
-
-else if (this.state === 'BATTLE') this.drawBattle();
-
-// Fix: Draw background for overlay states
-
-else if (this.state === 'GAMEOVER' || this.state === 'VICTORY' || this.state === 'LEVEL_COMPLETE') {
-
-if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
-
-}
-
-this.explosions.forEach(e => {
-
-this.ctx.save(); this.ctx.globalAlpha=e.a; this.ctx.fillStyle='orange';
-
-this.ctx.beginPath(); this.ctx.arc(e.x,e.y,e.r,0,Math.PI*2); this.ctx.fill();
-
-this.ctx.restore();
-
-});
-
-}
-
-
-// --- LOGIC: SPACE ROAM ---
-
-updateSpace() {
-
-if(this.player.rotateLeft) this.player.angle -= 0.08;
-
-if(this.player.rotateRight) this.player.angle += 0.08;
-
-if(this.player.thrust && this.player.fuel>0) {
-
-this.player.vx += Math.cos(this.player.angle)*0.2;
-
-this.player.vy += Math.sin(this.player.angle)*0.2;
-
-this.player.fuel -= 0.05;
-
-}
-
-this.player.vx *= 0.98; this.player.vy *= 0.98;
-
-this.player.x += this.player.vx; this.player.y += this.player.vy;
-
-if(this.player.x<0) this.player.x=this.width; if(this.player.x>this.width) this.player.x=0;
-
-if(this.player.y<0) this.player.y=this.height; if(this.player.y>this.height) this.player.y=0;
-
-
-if(this.player.fuel <= 0) this.gameOver("Kehabisan Bahan Bakar di Luar Angkasa!");
-
-
-this.asteroids.forEach(ast => {
-
-ast.x += ast.vx; ast.y += ast.vy; ast.angle += 0.02;
-
-if(ast.x<0) ast.x=this.width; if(ast.x>this.width) ast.x=0;
-
-if(ast.y<0) ast.y=this.height; if(ast.y>this.height) ast.y=0;
-
-if(Date.now() > this.player.immuneUntil && Math.hypot(this.player.x-ast.x, this.player.y-ast.y) < this.player.radius+ast.radius) {
-
-this.spawnExplosion(ast.x, ast.y);
-
-this.player.fuel -= 10; this.player.score = Math.max(0, this.player.score-50);
-
-this.player.vx *= -1.5; this.player.vy *= -1.5; 
-
-this.player.immuneUntil = Date.now() + 2000;
-
-ast.x = -999; 
-
-}
-
-});
-
-
-const p = this.planets[0];
-
-if(Math.hypot(this.player.x-p.x, this.player.y-p.y) < this.player.radius+p.radius) {
-
-this.changeState('ENTRY_QUIZ');
-
-}
-
-}
-
-
-drawSpace() {
-
-if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
-
-const p = this.planets[0];
-
-this.ctx.save();
-
-this.ctx.shadowBlur=20; this.ctx.shadowColor='yellow';
-
-this.ctx.drawImage(p.img, p.x-p.radius, p.y-p.radius, p.radius*2, p.radius*2);
-
-this.ctx.restore();
-
-this.ctx.fillStyle="white"; this.ctx.textAlign="center"; this.ctx.font="bold 16px Segoe UI";
-
-this.ctx.fillText(p.name, p.x, p.y+p.radius+20);
-
-
-this.asteroids.forEach(ast => {
-
-this.ctx.save(); this.ctx.translate(ast.x, ast.y); this.ctx.rotate(ast.angle);
-
-this.ctx.drawImage(ast.img, -ast.radius, -ast.radius, ast.radius*2, ast.radius*2);
-
-this.ctx.restore();
-
-});
-
-
-this.drawPlayer(true);
-
-
-// HUD
-
-this.drawBar(40, 20, 300, 25, this.player.displayedFuel, 100, '#ff9900', 'FUEL');
-
-this.ctx.fillStyle='white'; this.ctx.textAlign='left';
-
-this.ctx.font='bold 24px Segoe UI';
-
-this.ctx.fillText(`Score: ${this.player.score}`, 40, 80);
-
-}
-
-
-drawBar(x, y, w, h, val, max, color, label) {
-
-// Background
-
-this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
-
-this.ctx.fillRect(x, y, w, h);
-
-this.ctx.strokeStyle = 'white';
-
-this.ctx.lineWidth = 2;
-
-this.ctx.strokeRect(x, y, w, h);
-
-
-// Bar
-
-const fillW = Math.max(0, (val / max) * w);
-
-const grd = this.ctx.createLinearGradient(x, y, x, y+h);
-
-grd.addColorStop(0, color);
-
-grd.addColorStop(1, '#000');
-
-this.ctx.fillStyle = grd;
-
-this.ctx.fillRect(x, y, fillW, h);
-
-
-// Text
-
-this.ctx.fillStyle = 'white';
-
-this.ctx.font = 'bold 16px Segoe UI';
-
-this.ctx.textAlign = 'center';
-
-this.ctx.fillText(`${label} ${Math.floor(val)}%`, x + w/2, y + h - 6);
-
-}
-
-
-drawPlayer(rotate) {
-
-this.ctx.save();
-
-this.ctx.translate(this.player.x, this.player.y);
-
-if(rotate) this.ctx.rotate(this.player.angle);
-
-if(this.player.immuneUntil > Date.now() && this.player.flashTick%10<5) this.ctx.globalAlpha=0.5;
-
-const sz = 100; 
-
-this.ctx.drawImage(this.images[this.player.shipType], -sz/2, -sz/2, sz, sz);
-
-if(this.player.thrust || this.player.moveUp || this.player.moveDown) {
-
-this.ctx.fillStyle='#ffaa00';
-
-this.ctx.beginPath(); this.ctx.moveTo(-40, -5); this.ctx.lineTo(-70, 0); this.ctx.lineTo(-40, 5); this.ctx.fill();
-
-}
-
-this.ctx.restore();
-
-}
-
-
-spawnExplosion(x,y) { this.explosions.push({x,y,r:10,a:1}); }
-
-spawnBigExplosion(x,y) {
-
-for(let i=0; i<20; i++) {
-
-this.explosions.push({
-
-x: x + (Math.random()-0.5)*150,
-
-y: y + (Math.random()-0.5)*150,
-
-r: 20 + Math.random()*40,
-
-a: 1.0
-
-});
-
-}
-
-}
-
-
-// --- PHASE 1: ENTRY QUIZ ---
-
-startEntryQuiz() {
-
-document.getElementById('entry-quiz-modal').classList.remove('hidden');
-
-this.quizSet = getRandomQuestions(10);
-
-this.quizIndex = 0;
-
-this.quizCorrect = 0;
-
-this.renderEntryQuestion();
-
-}
-
-
-renderEntryQuestion() {
-
-const q = this.quizSet[this.quizIndex];
-
-document.getElementById('eq-progress').innerText = `Soal: ${this.quizIndex+1}/10`;
-
-document.getElementById('eq-score').innerText = `Benar: ${this.quizCorrect}`;
-
-document.getElementById('eq-question').innerText = q.q;
-
-const div = document.getElementById('eq-options'); div.innerHTML='';
-
-q.o.forEach((opt, i) => {
-
-const btn = document.createElement('div');
-
-btn.className = 'quiz-btn'; btn.innerText = opt;
-
-btn.onclick = () => this.checkEntryAnswer(i === q.a);
-
-div.appendChild(btn);
-
-});
-
-}
-
-
-checkEntryAnswer(isCorrect) {
-
-if(isCorrect) { this.quizCorrect++; this.player.score += 50; }
-
-this.quizIndex++;
-
-if(this.quizIndex >= 10) {
-
-if(this.quizCorrect >= 5) this.changeState('AMMO_QUIZ');
-
-else this.gameOver("Gagal Izin Mendarat. Nilai Kuis Kurang dari 5. Belajar lagi ya!");
-
-} else {
-
-this.renderEntryQuestion();
-
-}
-
-}
-
-
-// --- PHASE 3: AMMO QUIZ ---
-
-showAmmoIntro() {
-
-document.getElementById('entry-quiz-modal').classList.add('hidden');
-
-document.getElementById('ammo-intro-screen').classList.remove('hidden');
-
-document.getElementById('ammo-planet-name').innerText = LEVEL_NAMES[this.level].toUpperCase();
-
-}
-
-
-startAmmoQuiz(isReload) {
-
-document.getElementById('ammo-intro-screen').classList.add('hidden');
-
-document.getElementById('ammo-quiz-modal').classList.remove('hidden');
-
-document.getElementById('aq-title').innerText = isReload ? "SOAL TAMBAHAN (RELOAD)" : "SUPLAI AMUNISI";
-
-this.isReloadQuiz = isReload;
-
-if(isReload) this.player.reloadUsed = true;
-
-if(isReload) this.player.ammo = 0; 
-
-
-this.quizSet = getRandomQuestions(30); 
-
-this.quizIndex = 0;
-
-this.quizTimer = 15; 
-
-this.renderAmmoQuestion();
-
-if(this.quizInterval) clearInterval(this.quizInterval);
-
-this.quizInterval = setInterval(() => {
-
-this.quizTimer--;
-
-document.getElementById('aq-timer').innerText = `Waktu: ${this.quizTimer}s`;
-
-if(this.quizTimer <= 0) {
-
-clearInterval(this.quizInterval);
-
-if(this.isReloadQuiz && this.player.ammo <= 0) {
-
-this.gameOver("Gagal Reload. Amunisi Kosong!");
-
-} else {
-
-this.changeState('BATTLE');
-
-}
-
-}
-
-}, 1000);
-
-}
-
-
-renderAmmoQuestion() {
-
-const q = this.quizSet[this.quizIndex];
-
-document.getElementById('aq-ammo').innerText = `Amunisi: ${this.player.ammo}`;
-
-document.getElementById('aq-question').innerText = q.q;
-
-const div = document.getElementById('aq-options'); div.innerHTML='';
-
-q.o.forEach((opt, i) => {
-
-const btn = document.createElement('div');
-
-btn.className = 'quiz-btn'; btn.innerText = opt;
-
-btn.onclick = () => {
-
-if(i === q.a) { this.player.ammo += 10; this.player.score += 20; }
-
-this.quizIndex++; this.renderAmmoQuestion();
-
-};
-
-div.appendChild(btn);
-
-});
-
-}
-
-
-// --- PHASE 4: BATTLE MODE ---
-
-initBattle() {
-
-document.getElementById('ammo-quiz-modal').classList.add('hidden');
-
-this.player.hp = 100;
-
-this.player.displayedHp = 100;
-
-this.player.reloadUsed = false;
-
-this.player.x = 100; this.player.y = this.height/2; this.player.angle=0;
-
-this.bullets = [];
-
-this.enemyBullets = [];
-
-this.enemies = [];
-
-this.bonusItems = [];
-
-this.bgScrollX = 0;
-
-this.boss = null;
-
-this.bossTimer = 0; 
-
-this.spawnEnemyTimer = 0;
-
-this.bonusSpawnedAlien = 0;
-
-this.bonusSpawnedBoss = 0;
-
-}
-
-
-fireBullet() {
-
-if(this.player.ammo > 0) {
-
-this.bullets.push({x: this.player.x+50, y: this.player.y});
-
-this.player.ammo--;
-
-}
-
-}
-
-
-updateBattle() {
-
-if (this.state !== 'BATTLE') return; 
-
-
-this.bgScrollX -= 2;
-
-if(this.bgScrollX <= -this.width) this.bgScrollX = 0;
-
-
-const speed = 7;
-
-if(this.player.moveUp && this.player.y > 50) this.player.y -= speed;
-
-if(this.player.moveDown && this.player.y < this.height-50) this.player.y += speed;
-
-if(this.player.moveLeft && this.player.x > 50) this.player.x -= speed;
-
-if(this.player.moveRight && this.player.x < this.width/2) this.player.x += speed;
-
-
-for(let i=this.bullets.length-1; i>=0; i--) {
-
-let b = this.bullets[i];
-
-b.x += 15; 
-
-if(b.x > this.width) this.bullets.splice(i,1);
-
-}
-
-
-for(let i=this.enemyBullets.length-1; i>=0; i--) {
-
-let eb = this.enemyBullets[i];
-
-eb.x -= 10; 
-
-if(eb.x < 0) this.enemyBullets.splice(i,1);
-
-else if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, eb.x, eb.y, 20, 10)) {
-
-this.damagePlayer(10);
-
-this.enemyBullets.splice(i,1);
-
-}
-
-}
-
-
-// BONUS ITEM LOGIC
-
-if(!this.boss && this.bonusSpawnedAlien < 2) {
-
-if((this.bossTimer === 300 && this.bonusSpawnedAlien === 0) || (this.bossTimer === 700 && this.bonusSpawnedAlien === 1)) {
-
-this.spawnBonus();
-
-this.bonusSpawnedAlien++;
-
-}
-
-}
-
-if(this.boss && this.bonusSpawnedBoss < 2) {
-
-const hpRatio = this.boss.hp / this.boss.maxHp;
-
-if((hpRatio < 0.75 && this.bonusSpawnedBoss === 0) || (hpRatio < 0.3 && this.bonusSpawnedBoss === 1)) {
-
-this.spawnBonus();
-
-this.bonusSpawnedBoss++;
-
-}
-
-}
-
-
-for(let i=this.bonusItems.length-1; i>=0; i--) {
-
-let b = this.bonusItems[i];
-
-b.x -= 3;
-
-if(b.x < -50) this.bonusItems.splice(i,1);
-
-else if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, b.x, b.y, 40, 40)) {
-
-this.player.hp = Math.min(100, this.player.hp + 20); // Heal
-
-this.player.ammo += 15; // ADD AMMO
-
-this.player.score += 50;
-
-this.bonusItems.splice(i,1);
-
-}
-
-}
-
-
-this.bossTimer++;
-
-if(!this.boss && this.bossTimer < 1000) { 
-
-this.spawnEnemyTimer++;
-
-if(this.spawnEnemyTimer > 60 - (this.level*5)) { 
-
-this.spawnEnemyTimer = 0;
-
-this.enemies.push({
-
-x: this.width + 50,
-
-y: Math.random()*(this.height-100)+50,
-
-hp: 1, type: 'alien', w: 80, h: 50,
-
-vx: -3 - (this.level*0.5),
-
-shootTimer: Math.random()*100
-
-});
-
-}
-
-} else if(!this.boss && this.bossTimer >= 1000 && this.enemies.length === 0) {
-
-// BOSS NERF: 15 + level*5 HP
-
-const bossMaxHp = 15 + (this.level * 5); 
-
-this.boss = {
-
-x: this.width - 300, y: this.height/2,
-
-hp: bossMaxHp, maxHp: bossMaxHp,
-
-type: 'boss', w: 250, h: 250, vy: 3, dir: 1,
-
-shootTimer: 0
-
-};
-
-}
-
-
-for(let i=this.enemies.length-1; i>=0; i--) {
-
-let e = this.enemies[i];
-
-e.x += e.vx;
-
-e.shootTimer++;
-
-if(e.shootTimer > 150) {
-
-this.enemyBullets.push({x: e.x, y: e.y});
-
-e.shootTimer = 0;
-
-}
-
-if(e.x < -100) this.enemies.splice(i,1);
-
-if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, e.x, e.y, e.w, e.h)) {
-
-this.damagePlayer(20);
-
-this.spawnExplosion(e.x, e.y);
-
-this.enemies.splice(i,1);
-
-}
-
-}
-
-
-if(this.boss) {
-
-this.boss.y += this.boss.vy * this.boss.dir;
-
-if(this.boss.y > this.height-150 || this.boss.y < 150) this.boss.dir *= -1;
-
-this.boss.shootTimer++;
-
-if(this.boss.shootTimer > 40) {
-
-this.enemyBullets.push({x: this.boss.x-100, y: this.boss.y});
-
-this.boss.shootTimer = 0;
-
-}
-
-if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, this.boss.x, this.boss.y, this.boss.w, this.boss.h)) {
-
-if(this.player.immuneUntil < Date.now()) {
-
-this.damagePlayer(30);
-
-this.player.immuneUntil = Date.now() + 2000;
-
-this.player.x -= 150; 
-
-}
-
-}
-
-}
-
-
-for(let i=this.bullets.length-1; i>=0; i--) {
-
-let b = this.bullets[i];
-
-let hit = false;
-
-for(let j=this.enemies.length-1; j>=0; j--) {
-
-let e = this.enemies[j];
-
-if(this.checkRectCollision(b.x, b.y, 20, 8, e.x, e.y, e.w, e.h)) {
-
-this.enemies.splice(j,1);
-
-this.spawnExplosion(e.x, e.y);
-
-this.player.score += 50;
-
-hit = true; break;
-
-}
-
-}
-
-if(!hit && this.boss) {
-
-if(this.checkRectCollision(b.x, b.y, 20, 8, this.boss.x, this.boss.y, this.boss.w, this.boss.h)) {
-
-this.boss.hp--;
-
-this.spawnExplosion(b.x, b.y); 
-
-hit = true;
-
-if(this.boss.hp <= 0) {
-
-this.finishLevel();
-
-}
-
-}
-
-}
-
-if(hit) this.bullets.splice(i,1);
-
-}
-
-if(this.player.ammo <= 0 && this.bullets.length === 0) {
-
-if(!this.player.reloadUsed) {
-
-this.startAmmoQuiz(true); 
-
-} else {
-
-setTimeout(() => {
-
-if(this.state === 'BATTLE' && this.player.ammo <= 0) this.gameOver("Amunisi Habis! Tidak bisa menembak.");
-
-}, 1000);
-
-}
-
-}
-
-
-if(this.player.hp <= 0) this.gameOver("Pesawat Hancur dalam Pertempuran!");
-
-}
-
-
-spawnBonus() {
-
-this.bonusItems.push({
-
-x: this.width + 50,
-
-y: Math.random() * (this.height - 100) + 50
-
-});
-
-}
-
-
-checkRectCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
-
-let r1x = x1 - w1/2, r1y = y1 - h1/2;
-
-let r2x = x2 - w2/2, r2y = y2 - h2/2;
-
-return r1x < r2x + w2 && r1x + w1 > r2x && r1y < r2y + h2 && r1y + h1 > r2y;
-
-}
-
-
-damagePlayer(amount) {
-
-this.player.hp -= amount;
-
-this.spawnExplosion(this.player.x, this.player.y);
-
-}
-
-
-drawBattle() {
-
-const bgImg = this.images['bg'+(this.level+1)]; 
-
-if(bgImg) {
-
-this.ctx.drawImage(bgImg, this.bgScrollX, 0, this.width, this.height);
-
-this.ctx.drawImage(bgImg, this.bgScrollX + this.width, 0, this.width, this.height);
-
-}
-
-
-this.drawPlayer(false);
-
-
-this.enemies.forEach(e => {
-
-this.ctx.drawImage(this.images.alien, e.x-e.w/2, e.y-e.h/2, e.w, e.h);
-
-});
-
-
-this.bonusItems.forEach(b => {
-
-this.ctx.fillStyle = '#fff';
-
-this.ctx.beginPath();
-
-this.ctx.fillRect(b.x-15, b.y-15, 30, 30);
-
-this.ctx.fillStyle = 'red';
-
-this.ctx.fillRect(b.x-5, b.y-10, 10, 20);
-
-this.ctx.fillRect(b.x-10, b.y-5, 20, 10);
-
-this.ctx.strokeStyle = '#000';
-
-this.ctx.lineWidth = 2;
-
-this.ctx.strokeRect(b.x-15, b.y-15, 30, 30);
-
-});
-
-
-if(this.boss) {
-
-const bossImg = this.images['bos'+(this.level+1)];
-
-if(bossImg) this.ctx.drawImage(bossImg, this.boss.x-this.boss.w/2, this.boss.y-this.boss.h/2, this.boss.w, this.boss.h);
-
-this.ctx.fillStyle = 'red';
-
-this.ctx.fillRect(this.boss.x - 50, this.boss.y - this.boss.h/2 - 20, 100, 10);
-
-this.ctx.fillStyle = '#00ff00';
-
-this.ctx.fillRect(this.boss.x - 50, this.boss.y - this.boss.h/2 - 20, 100 * (this.boss.hp/this.boss.maxHp), 10);
-
-}
-
-
-this.ctx.fillStyle = 'yellow';
-
-this.bullets.forEach(b => {
-
-this.ctx.fillRect(b.x, b.y-4, 20, 8);
-
-});
-
-
-this.ctx.fillStyle = '#ff00ff';
-
-this.enemyBullets.forEach(eb => {
-
-this.ctx.beginPath(); this.ctx.arc(eb.x, eb.y, 8, 0, Math.PI*2); this.ctx.fill();
-
-});
-
-
-this.drawBar(40, 20, 300, 25, this.player.displayedHp, 100, '#ff0000', 'HP');
-
-this.ctx.fillStyle = 'white'; this.ctx.textAlign='left';
-
-this.ctx.font='bold 24px Segoe UI';
-
-this.ctx.fillText(`Ammo: ${this.player.ammo}`, 40, 80);
-
-this.ctx.fillText(`Score: ${this.player.score}`, 40, 110);
-
-if(this.player.reloadUsed && this.player.ammo < 10) {
-
-this.ctx.fillStyle = 'red'; this.ctx.font='bold 20px Segoe UI';
-
-this.ctx.fillText(`BAHAYA: AMUNISI KOSONG (TIDAK ADA RELOAD)`, 40, 140);
-
-}
-
-}
-
-
-finishLevel() {
-
-// Spawn big explosion first
-
-this.spawnBigExplosion(this.boss.x, this.boss.y);
-
-this.boss = null;
-
-// Immediately switch state to prevent glitch/update loop
-
-// Wait 1.5s for explosion effect then show popup
-
-setTimeout(() => {
-
-this.changeState('LEVEL_COMPLETE');
-
-}, 1500); 
-
-}
-
-
-nextLevel() {
-
-this.level++;
-
-if(this.level >= 8) this.changeState('VICTORY');
-
-else {
-
-this.changeState('LEVEL_INTRO');
-
-}
-
-}
-
-
-gameOver(msg) {
-
-this.changeState('GAMEOVER');
-
-document.getElementById('end-title').innerText = "MISI GAGAL";
-
-document.getElementById('end-message').innerText = msg;
-
-document.getElementById('end-score').innerText = this.player.score;
-
-}
-
-
-showEndScreen() {
-
-if(this.state === 'VICTORY') {
-
-document.getElementById('end-title').innerText = "MISI SUKSES!";
-
-document.getElementById('end-title').style.color = "#00ff00";
-
-document.getElementById('end-message').innerText = `Selamat Komandan ${this.player.name}! Tata Surya aman berkat Anda.`;
-
-document.getElementById('end-score').innerText = this.player.score;
-
-}
-
-}
-
-}
-
-
-let game;
-
-window.onload = () => { game = new Game(); };
-
-
-</script>
-
+    <div id="portrait-warning"><h1>⚠️ PERHATIAN</h1><p>Mohon putar perangkat ke LANDSCAPE.</p></div>
+
+    <div id="game-wrapper">
+        <div id="game-area">
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- CONTROLS: SPACE MODE -->
+            <div id="controls-space" class="hidden">
+                <div id="touch-controls">
+                    <div class="touch-group"><div class="t-btn" id="btn-left">↺</div><div class="t-btn" id="btn-right">↻</div></div>
+                    <div class="touch-group"><div class="t-btn" id="btn-thrust">🔥</div></div>
+                </div>
+            </div>
+
+            <!-- CONTROLS: BATTLE MODE -->
+            <div id="controls-battle" class="hidden">
+                <div id="touch-controls">
+                    <div class="touch-group">
+                        <div class="t-btn" id="btn-battle-left">◀</div>
+                        <div class="d-pad-col">
+                            <div class="t-btn" id="btn-up">▲</div>
+                            <div class="t-btn" id="btn-down">▼</div>
+                        </div>
+                        <div class="t-btn" id="btn-battle-right">▶</div>
+                    </div>
+                    <div class="touch-group">
+                        <div class="t-btn btn-shoot" id="btn-fire" style="background: rgba(255,0,0,0.3); border-color: red;">🔫</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LOADING -->
+            <div id="loading-screen" class="overlay">
+                <h1>MEMUAT DATA KOSMIK...</h1>
+                <div id="loading-bar-container"><div id="loading-bar"></div></div>
+            </div>
+
+            <!-- SPLASH -->
+            <div id="splash-screen" class="overlay hidden">
+                <div style="margin-top: 15%;"></div>
+                <button class="btn" style="font-size: 5vh;" onclick="game.changeState('SETUP')">MULAI MISI</button>
+            </div>
+
+            <!-- SETUP -->
+            <div id="setup-screen" class="overlay hidden">
+                <h2>PILIH PESAWAT KOMANDAN</h2>
+                <div class="ship-selector">
+                    <div class="ship-option" onclick="game.selectShip(this, 'shipBlue')"><img id="preview-blue"></div>
+                    <div class="ship-option" onclick="game.selectShip(this, 'shipRed')"><img id="preview-red"></div>
+                    <div class="ship-option" onclick="game.selectShip(this, 'shipGold')"><img id="preview-gold"></div>
+                    <div class="ship-option" onclick="game.selectShip(this, 'shipGreen')"><img id="preview-green"></div>
+                </div>
+                <input type="text" id="player-name-input" placeholder="Nama Komandan..." maxlength="12">
+                <button id="btn-start-game" class="btn" disabled onclick="game.startGame()">BERANGKAT!</button>
+            </div>
+
+            <!-- LEVEL INTRO -->
+            <div id="level-intro-screen" class="overlay hidden">
+                <div class="level-box">
+                    <h2 id="level-title-text">LEVEL 1 : MERKURIUS</h2>
+                    <p id="level-instruction-text">Jelajahi luar angkasa, hindari asteroid, dan temukan planet tujuan!</p>
+                    <button class="btn" onclick="game.startLevel()">LUNCURKAN!</button>
+                </div>
+            </div>
+
+            <!-- LEVEL COMPLETE (POPUP SKOR) -->
+            <div id="level-complete-screen" class="overlay hidden">
+                <h1 style="color: #00ff00;">MISI BERHASIL!</h1>
+                <p>Area Planet Telah Diamankan.</p>
+                <p>Skor Saat Ini: <span id="lc-score" style="color: yellow; font-weight: bold;">0</span></p>
+                <button class="btn" onclick="game.nextLevel()">LANJUT KE PLANET BERIKUTNYA</button>
+            </div>
+
+            <!-- QUIZ: ENTRY -->
+            <div id="entry-quiz-modal" class="overlay hidden">
+                <div id="quiz-container">
+                    <div class="quiz-status">
+                        <span id="eq-progress">Soal: 1/10</span>
+                        <span id="eq-score" style="color: yellow;">Benar: 0</span>
+                    </div>
+                    <h3 style="color: #00ccff;">IZIN PENDARATAN</h3>
+                    <p id="eq-question" style="font-weight: bold; color: white;">?</p>
+                    <div class="quiz-options" id="eq-options"></div>
+                </div>
+            </div>
+
+            <!-- QUIZ: AMMO -->
+            <div id="ammo-intro-screen" class="overlay hidden">
+                <h1>PLANET TERCAPAI!</h1>
+                <p>Selamat datang di <span id="ammo-planet-name" style="color:yellow; font-weight:bold;">MARS</span>.</p>
+                <p>Hancurkan alien dan Bos Musuh untuk mendapatkan data planet!</p>
+                <p style="color: #00ccff;">JAWAB KUIS UNTUK MENDAPATKAN AMUNISI!</p>
+                <button class="btn" onclick="game.startAmmoQuiz(false)">MULAI ISI AMUNISI</button>
+            </div>
+
+            <div id="ammo-quiz-modal" class="overlay hidden">
+                <div id="quiz-container" style="border-color: #ff0000;">
+                    <div class="quiz-status">
+                        <span id="aq-timer" style="color: red;">Waktu: 15s</span>
+                        <span id="aq-ammo" style="color: yellow;">Amunisi: 0</span>
+                    </div>
+                    <h3 id="aq-title" style="color: #ff0000;">SUPLAI AMUNISI</h3>
+                    <p id="aq-question">?</p>
+                    <div class="quiz-options" id="aq-options"></div>
+                </div>
+            </div>
+
+            <!-- GAME OVER / VICTORY -->
+            <div id="end-screen" class="overlay hidden">
+                <h1 id="end-title">GAME OVER</h1>
+                <p id="end-message">Pesan.</p>
+                <p>Skor Akhir: <span id="end-score" style="color: yellow;">0</span></p>
+                <button class="btn" onclick="location.reload()">MAIN LAGI</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div id="game-footer">
+        <p class="footer-text">Game Design by @herisheroes 2026</p>
+        <div class="social-icons">
+            <a href="https://www.youtube.com/@herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
+            <a href="https://www.tiktok.com/@herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg></a>
+            <a href="https://www.instagram.com/herisheroes" target="_blank" class="social-link"><svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></a>
+        </div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT: Viewport Height Fix for Mobile ---
+        function setVh() {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        window.addEventListener('resize', setVh);
+        setVh(); // Call on load
+
+        // --- ASSETS DATABASE ---
+        const ASSETS_URL = 'https://raw.githubusercontent.com/rizqu24/kbmts/refs/heads/main/';
+        const ASSETS = {
+            bgSpace: ASSETS_URL + 'back0.png',
+            bgGame: ASSETS_URL + 'back1.png',
+            alien: ASSETS_URL + 'alienplane.png',
+            pMerkurius: ASSETS_URL + '1merkurius.png', pVenus: ASSETS_URL + '2venus.png', pBumi: ASSETS_URL + '3bumi.png',
+            pMars: ASSETS_URL + '4mars.png', pJupiter: ASSETS_URL + '5jupiter.png', pSaturnus: ASSETS_URL + '6saturnus.png',
+            pUranus: ASSETS_URL + '7uranus.png', pNeptunus: ASSETS_URL + '8neptunus.png',
+            ast1: ASSETS_URL + 'asteroid1.png', ast2: ASSETS_URL + 'asteroid2.png',
+            shipBlue: ASSETS_URL + 'blueplane.png', shipRed: ASSETS_URL + 'redplane.png',
+            shipGold: ASSETS_URL + 'goldplane.png', shipGreen: ASSETS_URL + 'greenplane.png',
+            bg1: ASSETS_URL + 'bg1.png', bos1: ASSETS_URL + 'bos1.png',
+            bg2: ASSETS_URL + 'bg2.png', bos2: ASSETS_URL + 'bos2.png',
+            bg3: ASSETS_URL + 'bg3.png', bos3: ASSETS_URL + 'bos3.png',
+            bg4: ASSETS_URL + 'bg4.png', bos4: ASSETS_URL + 'bos4.png',
+            bg5: ASSETS_URL + 'bg5.png', bos5: ASSETS_URL + 'bos5.png',
+            bg6: ASSETS_URL + 'bg6.png', bos6: ASSETS_URL + 'bos6.png',
+            bg7: ASSETS_URL + 'bg7.png', bos7: ASSETS_URL + 'bos7.png',
+            bg8: ASSETS_URL + 'bg8.png', bos8: ASSETS_URL + 'bos8.png',
+        };
+
+        const LEVEL_NAMES = ["Merkurius", "Venus", "Bumi", "Mars", "Jupiter", "Saturnus", "Uranus", "Neptunus"];
+        
+        // --- DATABASE SOAL (50 Soal) ---
+        const ALL_QUESTIONS = [
+            {q:"Pusat tata surya kita adalah...", o:["Bumi","Matahari","Bulan","Mars"], a:1},
+            {q:"Planet terdekat dari Matahari adalah...", o:["Venus","Merkurius","Bumi","Mars"], a:1},
+            {q:"Planet yang memiliki cincin paling indah...", o:["Jupiter","Saturnus","Uranus","Neptunus"], a:1},
+            {q:"Planet terbesar di tata surya...", o:["Bumi","Mars","Jupiter","Saturnus"], a:2},
+            {q:"Planet yang disebut planet merah...", o:["Mars","Venus","Merkurius","Jupiter"], a:0},
+            {q:"Satelit alami Bumi adalah...", o:["Titan","Europa","Bulan","Phobos"], a:2},
+            {q:"Benda langit yang memiliki ekor...", o:["Asteroid","Meteor","Komet","Satelit"], a:2},
+            {q:"Kumpulan bintang membentuk...", o:["Tata Surya","Galaksi","Rasi Bintang","Nebula"], a:2},
+            {q:"Galaksi tempat kita tinggal...", o:["Andromeda","Bima Sakti","Triangulum","Sombrero"], a:1},
+            {q:"Planet terpanas di tata surya...", o:["Merkurius","Venus","Mars","Bumi"], a:1},
+            {q:"Planet pembuat kehidupan...", o:["Bumi","Mars","Venus","Jupiter"], a:0},
+            {q:"Waktu revolusi Bumi adalah...", o:["24 jam","30 hari","365 hari","100 tahun"], a:2},
+            {q:"Waktu rotasi Bumi adalah...", o:["24 jam","12 jam","1 tahun","1 bulan"], a:0},
+            {q:"Peristiwa siang dan malam disebabkan...", o:["Revolusi Bumi","Rotasi Bumi","Gerhana","Gravitasi"], a:1},
+            {q:"Planet terjauh dari Matahari...", o:["Uranus","Neptunus","Pluto","Saturnus"], a:1},
+            {q:"Planet yang menggelinding (poros miring)...", o:["Uranus","Neptunus","Saturnus","Jupiter"], a:0},
+            {q:"Satelit terbesar Saturnus...", o:["Titan","Io","Europa","Ganymede"], a:0},
+            {q:"Satelit terbesar Jupiter...", o:["Titan","Ganymede","Callisto","Europa"], a:1},
+            {q:"Batuan luar angkasa yang terbakar di atmosfer...", o:["Meteorit","Meteor","Meteoroid","Asteroid"], a:1},
+            {q:"Batuan yang sampai ke tanah bumi...", o:["Meteor","Meteorit","Komet","Bintang"], a:1},
+            {q:"Alat untuk melihat bintang...", o:["Mikroskop","Teleskop","Periskop","Stetoskop"], a:1},
+            {q:"Bintang terdekat selain matahari...", o:["Sirius","Proxima Centauri","Vega","Betelgeuse"], a:1},
+            {q:"Warna bintang paling panas...", o:["Merah","Kuning","Biru","Putih"], a:2},
+            {q:"Gaya yang menahan planet mengelilingi matahari...", o:["Magnet","Gesek","Gravitasi","Pegas"], a:2},
+            {q:"Planet kembaran Bumi...", o:["Mars","Venus","Merkurius","Neptunus"], a:1},
+            {q:"Lapisan udara yang menyelimuti Bumi...", o:["Hidrosfer","Atmosfer","Lithosfer","Biosfer"], a:1},
+            {q:"Gas terbanyak di Matahari...", o:["Oksigen","Helium","Hidrogen","Nitrogen"], a:2},
+            {q:"Asteroid banyak ditemukan di antara...", o:["Mars & Jupiter","Bumi & Mars","Jupiter & Saturnus","Venus & Bumi"], a:0},
+            {q:"Gerhana matahari terjadi saat...", o:["Bulan di tengah","Bumi di tengah","Matahari di tengah","Bintang sejajar"], a:0},
+            {q:"Gerhana bulan terjadi saat...", o:["Bulan di tengah","Bumi di tengah","Matahari di tengah","Posisi acak"], a:1},
+            {q:"Fase bulan saat tidak terlihat...", o:["Purnama","Sabit","Baru","Separuh"], a:2},
+            {q:"Planet dalam adalah...", o:["Jupiter ke atas","Mars ke bawah","Saturnus","Uranus"], a:1},
+            {q:"Planet luar adalah...", o:["Merkurius, Venus","Bumi, Mars","Jupiter s.d Neptunus","Bulan"], a:2},
+            {q:"Benda langit yang memancarkan cahaya sendiri...", o:["Planet","Satelit","Bintang","Komet"], a:2},
+            {q:"Arah terbit Matahari...", o:["Barat","Timur","Utara","Selatan"], a:1},
+            {q:"Tahun Kabisat terjadi setiap...", o:["2 tahun","3 tahun","4 tahun","5 tahun"], a:2},
+            {q:"Jumlah hari tahun Kabisat...", o:["365","366","360","350"], a:1},
+            {q:"Bulan yang memiliki 29 hari saat Kabisat...", o:["Januari","Februari","Maret","April"], a:1},
+            {q:"Musim di Indonesia...", o:["Panas & Dingin","Hujan & Kemarau","Semi & Gugur","Salju"], a:1},
+            {q:"Penyebab perubahan musim...", o:["Rotasi Bumi","Revolusi Bumi","Rotasi Bulan","Revolusi Bulan"], a:1},
+            {q:"Negara matahari terbit...", o:["Cina","Korea","Jepang","Indonesia"], a:2},
+            {q:"Astronot pertama di bulan...", o:["Yuri Gagarin","Neil Armstrong","Buzz Aldrin","Michael Collins"], a:1},
+            {q:"Lapisan matahari terluar...", o:["Inti","Korona","Fotosfer","Kromosfer"], a:1},
+            {q:"Planet kerdil...", o:["Pluto","Mars","Bumi","Merkurius"], a:0},
+            {q:"Rasi bintang penunjuk arah selatan...", o:["Pari (Crux)","Ursa Mayor","Orion","Scorpio"], a:0},
+            {q:"Rasi bintang penunjuk arah utara...", o:["Pari","Ursa Mayor","Orion","Leo"], a:1},
+            {q:"Kalender Masehi berdasarkan...", o:["Bulan","Matahari","Bintang","Pasang surut"], a:1},
+            {q:"Kalender Hijriah berdasarkan...", o:["Bulan","Matahari","Bintang","Musim"], a:0},
+            {q:"Pasang surut air laut disebabkan...", o:["Gravitasi Matahari","Gravitasi Bulan","Angin","Hujan"], a:1},
+            {q:"Bentuk orbit planet...", o:["Lingkaran","Kotak","Elips","Segitiga"], a:2}
+        ];
+
+        function getRandomQuestions(count) {
+            const shuffled = [...ALL_QUESTIONS].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        // --- GAME ENGINE ---
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                // Canvas tetap 1280x720 internal resolution
+                this.width = 1280; this.height = 720;
+                this.canvas.width = this.width; this.canvas.height = this.height;
+                
+                this.images = {};
+                this.state = 'LOADING';
+                
+                // Entities
+                this.player = {
+                    x: 0, y: 0, angle: 0, 
+                    vx: 0, vy: 0, 
+                    thrust: false, rotateLeft: false, rotateRight: false,
+                    moveUp: false, moveDown: false, moveLeft: false, moveRight: false, shooting: false,
+                    fuel: 100, displayedFuel: 100, 
+                    score: 0, 
+                    hp: 100, displayedHp: 100,
+                    ammo: 0, name: "", shipType: "",
+                    radius: 25, immuneUntil: 0, flashTick: 0,
+                    reloadUsed: false
+                };
+                
+                this.level = 0; 
+                this.planets = [];
+                this.asteroids = [];
+                this.bullets = [];
+                this.enemyBullets = [];
+                this.enemies = []; 
+                this.bonusItems = []; 
+                this.boss = null;
+                this.explosions = [];
+                this.bgScrollX = 0;
+
+                this.bossTimer = 0;
+                this.spawnEnemyTimer = 0;
+                this.bonusSpawnedAlien = 0;
+                this.bonusSpawnedBoss = 0;
+
+                this.quizSet = [];
+                this.quizIndex = 0;
+                this.quizCorrect = 0;
+                this.quizTimer = 0;
+                this.quizInterval = null;
+                this.isReloadQuiz = false;
+
+                this.setupInputs();
+                this.loadAssets();
+            }
+
+            async loadAssets() {
+                const keys = Object.keys(ASSETS);
+                let loaded = 0;
+                const bar = document.getElementById('loading-bar');
+                const promises = keys.map(key => new Promise(resolve => {
+                    const img = new Image();
+                    img.src = ASSETS[key];
+                    img.onload = () => { loaded++; bar.style.width = (loaded/keys.length*100)+'%'; this.images[key] = img; resolve(); };
+                    img.onerror = () => { console.log('Err load: '+key); this.images[key] = null; resolve(); };
+                }));
+                await Promise.all(promises);
+                ['blue','red','gold','green'].forEach(c => document.getElementById(`preview-${c}`).src = ASSETS[`ship${c.charAt(0).toUpperCase()+c.slice(1)}`]);
+                setTimeout(() => { document.getElementById('loading-screen').classList.add('hidden'); this.changeState('SPLASH'); this.loop(); }, 500);
+            }
+
+            changeState(state) {
+                this.state = state;
+                document.querySelectorAll('.overlay, #controls-space, #controls-battle').forEach(e => e.classList.add('hidden'));
+
+                // Footer Logic: Show only on SPLASH and SETUP
+                const footer = document.getElementById('game-footer');
+                if(state === 'SPLASH' || state === 'SETUP') {
+                    footer.classList.remove('hidden');
+                } else {
+                    footer.classList.add('hidden');
+                }
+
+                if (state === 'SPLASH') document.getElementById('splash-screen').classList.remove('hidden');
+                else if (state === 'SETUP') document.getElementById('setup-screen').classList.remove('hidden');
+                else if (state === 'LEVEL_INTRO') this.showLevelIntro();
+                else if (state === 'SPACE_ROAM') {
+                    document.getElementById('controls-space').classList.remove('hidden');
+                }
+                else if (state === 'ENTRY_QUIZ') this.startEntryQuiz();
+                else if (state === 'AMMO_QUIZ') this.showAmmoIntro();
+                else if (state === 'BATTLE') {
+                    document.getElementById('controls-battle').classList.remove('hidden');
+                    if(!this.isReloadQuiz) this.initBattle();
+                    else this.isReloadQuiz = false;
+                }
+                else if (state === 'LEVEL_COMPLETE') {
+                    document.getElementById('level-complete-screen').classList.remove('hidden');
+                    document.getElementById('lc-score').innerText = this.player.score;
+                }
+                else if (state === 'GAMEOVER' || state === 'VICTORY') this.showEndScreen();
+            }
+
+            // --- INPUTS ---
+            setupInputs() {
+                window.addEventListener('keydown', e => this.handleKey(e.key, true));
+                window.addEventListener('keyup', e => this.handleKey(e.key, false));
+                
+                const bind = (id, prop) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    const fn = (v) => { 
+                        this.player[prop] = v; 
+                        if(prop === 'shooting' && v && this.state === 'BATTLE') this.fireBullet();
+                    };
+                    el.onmousedown = el.ontouchstart = (e) => { e.preventDefault(); fn(true); };
+                    el.onmouseup = el.ontouchend = (e) => { e.preventDefault(); fn(false); };
+                };
+                bind('btn-left', 'rotateLeft'); bind('btn-right', 'rotateRight'); bind('btn-thrust', 'thrust');
+                bind('btn-up', 'moveUp'); bind('btn-down', 'moveDown'); 
+                bind('btn-battle-left', 'moveLeft'); bind('btn-battle-right', 'moveRight');
+                bind('btn-fire', 'shooting');
+            }
+
+            handleKey(key, down) {
+                if(this.state === 'SPACE_ROAM') {
+                    if(key==='ArrowUp') this.player.thrust = down;
+                    if(key==='ArrowLeft') this.player.rotateLeft = down;
+                    if(key==='ArrowRight') this.player.rotateRight = down;
+                } else if(this.state === 'BATTLE') {
+                    if(key==='ArrowUp') this.player.moveUp = down;
+                    if(key==='ArrowDown') this.player.moveDown = down;
+                    if(key==='ArrowLeft') this.player.moveLeft = down;
+                    if(key==='ArrowRight') this.player.moveRight = down;
+                    if(key===' ' && down && !this.player.shooting) this.fireBullet(); 
+                    if(key===' ') this.player.shooting = down;
+                }
+                if(this.state==='SETUP' && !down) this.checkStartReady();
+            }
+
+            selectShip(el, type) {
+                document.querySelectorAll('.ship-option').forEach(e=>e.classList.remove('selected'));
+                el.classList.add('selected'); this.player.shipType = type; this.checkStartReady();
+            }
+            checkStartReady() {
+                const name = document.getElementById('player-name-input').value.trim();
+                document.getElementById('btn-start-game').disabled = !(this.player.shipType && name);
+            }
+            startGame() {
+                this.player.name = document.getElementById('player-name-input').value;
+                this.level = 0; this.player.score = 0; this.player.fuel = 100;
+                this.changeState('LEVEL_INTRO');
+            }
+
+            showLevelIntro() {
+                document.getElementById('level-intro-screen').classList.remove('hidden');
+                document.getElementById('level-title-text').innerText = `LEVEL ${this.level+1} : ${LEVEL_NAMES[this.level]}`;
+                document.getElementById('level-instruction-text').innerHTML = 
+                    this.level === 0 ? "Halo Komandan! Kunjungi planet tujuan, jawab kuis izin mendarat, kumpulkan amunisi, dan kalahkan Alien!" : 
+                    `Target selanjutnya: <b>${LEVEL_NAMES[this.level]}</b>. Musuh semakin kuat!`;
+            }
+
+            startLevel() {
+                this.player.fuel = 100;
+                this.player.displayedFuel = 100;
+                this.player.x = this.width/2; this.player.y = this.height/2; 
+                this.player.vx=0; this.player.vy=0; this.player.angle=0;
+                this.player.immuneUntil = Date.now() + 3000;
+                
+                let px, py, dist;
+                do {
+                    px = Math.random() * (this.width - 200) + 100;
+                    py = Math.random() * (this.height - 200) + 100;
+                    dist = Math.hypot(px - this.width/2, py - this.height/2);
+                } while(dist < 350);
+
+                this.planets = [{
+                    id: 'p'+LEVEL_NAMES[this.level], img: this.images['p'+LEVEL_NAMES[this.level]],
+                    x: px, y: py,
+                    radius: 50, name: LEVEL_NAMES[this.level]
+                }];
+                // Reset asteroids
+                this.asteroids = [];
+                for(let i=0; i<6+this.level; i++) {
+                    this.asteroids.push({
+                        img: this.images[Math.random()>0.5?'ast1':'ast2'],
+                        x:Math.random()*this.width, y:Math.random()*this.height,
+                        vx:(Math.random()-0.5)*(2+this.level*0.3), vy:(Math.random()-0.5)*(2+this.level*0.3),
+                        radius:30+Math.random()*20, angle:0
+                    });
+                }
+                this.changeState('SPACE_ROAM');
+            }
+
+            // --- MAIN LOOP ---
+            loop() {
+                this.update(); this.draw(); requestAnimationFrame(()=>this.loop());
+            }
+
+            update() {
+                this.explosions.forEach(e => { e.r+=2; e.a-=0.05; });
+                this.explosions = this.explosions.filter(e => e.a > 0);
+                this.player.flashTick++;
+
+                this.player.displayedFuel += (this.player.fuel - this.player.displayedFuel) * 0.1;
+                this.player.displayedHp += (this.player.hp - this.player.displayedHp) * 0.1;
+
+                if (this.state === 'SPACE_ROAM') this.updateSpace();
+                else if (this.state === 'BATTLE') this.updateBattle();
+            }
+
+            draw() {
+                this.ctx.clearRect(0,0,this.width,this.height);
+                
+                if (this.state === 'SPLASH' || this.state === 'SETUP' || this.state === 'LEVEL_INTRO' || this.state === 'LOADING') {
+                    if(this.images.bgSpace) this.ctx.drawImage(this.images.bgSpace, 0, 0, this.width, this.height);
+                }
+                else if (this.state === 'SPACE_ROAM' || this.state === 'ENTRY_QUIZ') this.drawSpace();
+                else if (this.state === 'BATTLE') this.drawBattle();
+                // Fix: Draw background for overlay states
+                else if (this.state === 'GAMEOVER' || this.state === 'VICTORY' || this.state === 'LEVEL_COMPLETE') {
+                    if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
+                }
+                
+                this.explosions.forEach(e => {
+                    this.ctx.save(); this.ctx.globalAlpha=e.a; this.ctx.fillStyle='orange';
+                    this.ctx.beginPath(); this.ctx.arc(e.x,e.y,e.r,0,Math.PI*2); this.ctx.fill();
+                    this.ctx.restore();
+                });
+            }
+
+            // --- LOGIC: SPACE ROAM ---
+            updateSpace() {
+                if(this.player.rotateLeft) this.player.angle -= 0.08;
+                if(this.player.rotateRight) this.player.angle += 0.08;
+                if(this.player.thrust && this.player.fuel>0) {
+                    this.player.vx += Math.cos(this.player.angle)*0.2;
+                    this.player.vy += Math.sin(this.player.angle)*0.2;
+                    this.player.fuel -= 0.05;
+                }
+                this.player.vx *= 0.98; this.player.vy *= 0.98;
+                this.player.x += this.player.vx; this.player.y += this.player.vy;
+                
+                if(this.player.x<0) this.player.x=this.width; if(this.player.x>this.width) this.player.x=0;
+                if(this.player.y<0) this.player.y=this.height; if(this.player.y>this.height) this.player.y=0;
+
+                if(this.player.fuel <= 0) this.gameOver("Kehabisan Bahan Bakar di Luar Angkasa!");
+
+                this.asteroids.forEach(ast => {
+                    ast.x += ast.vx; ast.y += ast.vy; ast.angle += 0.02;
+                    if(ast.x<0) ast.x=this.width; if(ast.x>this.width) ast.x=0;
+                    if(ast.y<0) ast.y=this.height; if(ast.y>this.height) ast.y=0;
+                    
+                    if(Date.now() > this.player.immuneUntil && Math.hypot(this.player.x-ast.x, this.player.y-ast.y) < this.player.radius+ast.radius) {
+                        this.spawnExplosion(ast.x, ast.y);
+                        this.player.fuel -= 10; this.player.score = Math.max(0, this.player.score-50);
+                        this.player.vx *= -1.5; this.player.vy *= -1.5; 
+                        this.player.immuneUntil = Date.now() + 2000;
+                        ast.x = -999; 
+                    }
+                });
+
+                const p = this.planets[0];
+                if(Math.hypot(this.player.x-p.x, this.player.y-p.y) < this.player.radius+p.radius) {
+                    this.changeState('ENTRY_QUIZ');
+                }
+            }
+
+            drawSpace() {
+                if(this.images.bgGame) this.ctx.drawImage(this.images.bgGame, 0, 0, this.width, this.height);
+                
+                const p = this.planets[0];
+                this.ctx.save();
+                this.ctx.shadowBlur=20; this.ctx.shadowColor='yellow';
+                this.ctx.drawImage(p.img, p.x-p.radius, p.y-p.radius, p.radius*2, p.radius*2);
+                this.ctx.restore();
+                this.ctx.fillStyle="white"; this.ctx.textAlign="center"; this.ctx.font="bold 16px Segoe UI";
+                this.ctx.fillText(p.name, p.x, p.y+p.radius+20);
+
+                this.asteroids.forEach(ast => {
+                    this.ctx.save(); this.ctx.translate(ast.x, ast.y); this.ctx.rotate(ast.angle);
+                    this.ctx.drawImage(ast.img, -ast.radius, -ast.radius, ast.radius*2, ast.radius*2);
+                    this.ctx.restore();
+                });
+
+                this.drawPlayer(true);
+
+                // HUD
+                this.drawBar(40, 20, 300, 25, this.player.displayedFuel, 100, '#ff9900', 'FUEL');
+                this.ctx.fillStyle='white'; this.ctx.textAlign='left';
+                this.ctx.font='bold 24px Segoe UI';
+                this.ctx.fillText(`Score: ${this.player.score}`, 40, 80);
+            }
+
+            drawBar(x, y, w, h, val, max, color, label) {
+                // Background
+                this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                this.ctx.fillRect(x, y, w, h);
+                this.ctx.strokeStyle = 'white';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(x, y, w, h);
+
+                // Bar
+                const fillW = Math.max(0, (val / max) * w);
+                const grd = this.ctx.createLinearGradient(x, y, x, y+h);
+                grd.addColorStop(0, color);
+                grd.addColorStop(1, '#000');
+                this.ctx.fillStyle = grd;
+                this.ctx.fillRect(x, y, fillW, h);
+
+                // Text
+                this.ctx.fillStyle = 'white';
+                this.ctx.font = 'bold 16px Segoe UI';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(`${label} ${Math.floor(val)}%`, x + w/2, y + h - 6);
+            }
+
+            drawPlayer(rotate) {
+                this.ctx.save();
+                this.ctx.translate(this.player.x, this.player.y);
+                if(rotate) this.ctx.rotate(this.player.angle);
+                if(this.player.immuneUntil > Date.now() && this.player.flashTick%10<5) this.ctx.globalAlpha=0.5;
+                const sz = 100; 
+                this.ctx.drawImage(this.images[this.player.shipType], -sz/2, -sz/2, sz, sz);
+                if(this.player.thrust || this.player.moveUp || this.player.moveDown) {
+                    this.ctx.fillStyle='#ffaa00';
+                    this.ctx.beginPath(); this.ctx.moveTo(-40, -5); this.ctx.lineTo(-70, 0); this.ctx.lineTo(-40, 5); this.ctx.fill();
+                }
+                this.ctx.restore();
+            }
+
+            spawnExplosion(x,y) { this.explosions.push({x,y,r:10,a:1}); }
+            
+            spawnBigExplosion(x,y) {
+                for(let i=0; i<20; i++) {
+                    this.explosions.push({
+                        x: x + (Math.random()-0.5)*150,
+                        y: y + (Math.random()-0.5)*150,
+                        r: 20 + Math.random()*40,
+                        a: 1.0
+                    });
+                }
+            }
+
+            // --- PHASE 1: ENTRY QUIZ ---
+            startEntryQuiz() {
+                document.getElementById('entry-quiz-modal').classList.remove('hidden');
+                this.quizSet = getRandomQuestions(10);
+                this.quizIndex = 0;
+                this.quizCorrect = 0;
+                this.renderEntryQuestion();
+            }
+
+            renderEntryQuestion() {
+                const q = this.quizSet[this.quizIndex];
+                document.getElementById('eq-progress').innerText = `Soal: ${this.quizIndex+1}/10`;
+                document.getElementById('eq-score').innerText = `Benar: ${this.quizCorrect}`;
+                document.getElementById('eq-question').innerText = q.q;
+                const div = document.getElementById('eq-options'); div.innerHTML='';
+                q.o.forEach((opt, i) => {
+                    const btn = document.createElement('div');
+                    btn.className = 'quiz-btn'; btn.innerText = opt;
+                    // UPDATED: Pass btn element and correct/selected index
+                    btn.onclick = (e) => this.handleEntryAnswer(e.currentTarget, i === q.a, i, q.a);
+                    div.appendChild(btn);
+                });
+            }
+
+            handleEntryAnswer(btn, isCorrect, selectedIdx, correctIdx) {
+                // Disable all buttons
+                const parent = document.getElementById('eq-options');
+                Array.from(parent.children).forEach(b => b.style.pointerEvents = 'none');
+
+                // Visual Feedback
+                if(isCorrect) {
+                    btn.classList.add('correct');
+                    this.quizCorrect++;
+                    this.player.score += 50;
+                } else {
+                    btn.classList.add('wrong');
+                    // Highlight correct answer
+                    parent.children[correctIdx].classList.add('correct');
+                }
+
+                // Delay before next question
+                setTimeout(() => {
+                    this.quizIndex++;
+                    if(this.quizIndex >= 10) {
+                        if(this.quizCorrect >= 5) this.changeState('AMMO_QUIZ');
+                        else this.gameOver("Gagal Izin Mendarat. Nilai Kuis Kurang dari 5. Belajar lagi ya!");
+                    } else {
+                        this.renderEntryQuestion();
+                    }
+                }, 1000); // 1 detik delay
+            }
+
+            // --- PHASE 3: AMMO QUIZ ---
+            showAmmoIntro() {
+                document.getElementById('entry-quiz-modal').classList.add('hidden');
+                document.getElementById('ammo-intro-screen').classList.remove('hidden');
+                document.getElementById('ammo-planet-name').innerText = LEVEL_NAMES[this.level].toUpperCase();
+            }
+
+            startAmmoQuiz(isReload) {
+                document.getElementById('ammo-intro-screen').classList.add('hidden');
+                document.getElementById('ammo-quiz-modal').classList.remove('hidden');
+                document.getElementById('aq-title').innerText = isReload ? "SOAL TAMBAHAN (RELOAD)" : "SUPLAI AMUNISI";
+                
+                this.isReloadQuiz = isReload;
+                if(isReload) this.player.reloadUsed = true;
+                if(isReload) this.player.ammo = 0; 
+
+                this.quizSet = getRandomQuestions(30); 
+                this.quizIndex = 0;
+                this.quizTimer = 15; 
+                
+                this.renderAmmoQuestion();
+                
+                if(this.quizInterval) clearInterval(this.quizInterval);
+                this.quizInterval = setInterval(() => {
+                    this.quizTimer--;
+                    document.getElementById('aq-timer').innerText = `Waktu: ${this.quizTimer}s`;
+                    if(this.quizTimer <= 0) {
+                        clearInterval(this.quizInterval);
+                        if(this.isReloadQuiz && this.player.ammo <= 0) {
+                            this.gameOver("Gagal Reload. Amunisi Kosong!");
+                        } else {
+                            this.changeState('BATTLE');
+                        }
+                    }
+                }, 1000);
+            }
+
+            renderAmmoQuestion() {
+                const q = this.quizSet[this.quizIndex];
+                document.getElementById('aq-ammo').innerText = `Amunisi: ${this.player.ammo}`;
+                document.getElementById('aq-question').innerText = q.q;
+                const div = document.getElementById('aq-options'); div.innerHTML='';
+                q.o.forEach((opt, i) => {
+                    const btn = document.createElement('div');
+                    btn.className = 'quiz-btn'; btn.innerText = opt;
+                    // UPDATED: Pass btn element
+                    btn.onclick = (e) => this.handleAmmoAnswer(e.currentTarget, i === q.a, i, q.a);
+                    div.appendChild(btn);
+                });
+            }
+
+            handleAmmoAnswer(btn, isCorrect, selectedIdx, correctIdx) {
+                const parent = document.getElementById('aq-options');
+                Array.from(parent.children).forEach(b => b.style.pointerEvents = 'none');
+
+                if(isCorrect) {
+                    btn.classList.add('correct');
+                    this.player.ammo += 10; 
+                    this.player.score += 20; 
+                } else {
+                    btn.classList.add('wrong');
+                    parent.children[correctIdx].classList.add('correct');
+                }
+
+                // Short delay for Ammo Quiz
+                setTimeout(() => {
+                    this.quizIndex++; 
+                    this.renderAmmoQuestion();
+                }, 500); 
+            }
+
+            // --- PHASE 4: BATTLE MODE ---
+            initBattle() {
+                document.getElementById('ammo-quiz-modal').classList.add('hidden');
+                this.player.hp = 100;
+                this.player.displayedHp = 100;
+                this.player.reloadUsed = false;
+                this.player.x = 100; this.player.y = this.height/2; this.player.angle=0;
+                this.bullets = [];
+                this.enemyBullets = [];
+                this.enemies = [];
+                this.bonusItems = [];
+                this.bgScrollX = 0;
+                
+                this.boss = null;
+                this.bossTimer = 0; 
+                this.spawnEnemyTimer = 0;
+                this.bonusSpawnedAlien = 0;
+                this.bonusSpawnedBoss = 0;
+            }
+
+            fireBullet() {
+                if(this.player.ammo > 0) {
+                    this.bullets.push({x: this.player.x+50, y: this.player.y});
+                    this.player.ammo--;
+                }
+            }
+
+            updateBattle() {
+                if (this.state !== 'BATTLE') return; 
+
+                this.bgScrollX -= 2;
+                if(this.bgScrollX <= -this.width) this.bgScrollX = 0;
+
+                const speed = 7;
+                if(this.player.moveUp && this.player.y > 50) this.player.y -= speed;
+                if(this.player.moveDown && this.player.y < this.height-50) this.player.y += speed;
+                if(this.player.moveLeft && this.player.x > 50) this.player.x -= speed;
+                if(this.player.moveRight && this.player.x < this.width/2) this.player.x += speed;
+
+                for(let i=this.bullets.length-1; i>=0; i--) {
+                    let b = this.bullets[i];
+                    b.x += 15; 
+                    if(b.x > this.width) this.bullets.splice(i,1);
+                }
+
+                for(let i=this.enemyBullets.length-1; i>=0; i--) {
+                    let eb = this.enemyBullets[i];
+                    eb.x -= 10; 
+                    if(eb.x < 0) this.enemyBullets.splice(i,1);
+                    else if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, eb.x, eb.y, 20, 10)) {
+                         this.damagePlayer(10);
+                         this.enemyBullets.splice(i,1);
+                    }
+                }
+
+                // BONUS ITEM LOGIC
+                if(!this.boss && this.bonusSpawnedAlien < 2) {
+                    if((this.bossTimer === 300 && this.bonusSpawnedAlien === 0) || (this.bossTimer === 700 && this.bonusSpawnedAlien === 1)) {
+                        this.spawnBonus();
+                        this.bonusSpawnedAlien++;
+                    }
+                }
+                if(this.boss && this.bonusSpawnedBoss < 2) {
+                     const hpRatio = this.boss.hp / this.boss.maxHp;
+                     if((hpRatio < 0.75 && this.bonusSpawnedBoss === 0) || (hpRatio < 0.3 && this.bonusSpawnedBoss === 1)) {
+                         this.spawnBonus();
+                         this.bonusSpawnedBoss++;
+                     }
+                }
+
+                for(let i=this.bonusItems.length-1; i>=0; i--) {
+                    let b = this.bonusItems[i];
+                    b.x -= 3;
+                    if(b.x < -50) this.bonusItems.splice(i,1);
+                    else if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, b.x, b.y, 40, 40)) {
+                        this.player.hp = Math.min(100, this.player.hp + 20); // Heal
+                        this.player.ammo += 15; // ADD AMMO
+                        this.player.score += 50;
+                        this.bonusItems.splice(i,1);
+                    }
+                }
+
+                this.bossTimer++;
+                if(!this.boss && this.bossTimer < 1000) { 
+                    this.spawnEnemyTimer++;
+                    if(this.spawnEnemyTimer > 60 - (this.level*5)) { 
+                        this.spawnEnemyTimer = 0;
+                        this.enemies.push({
+                            x: this.width + 50,
+                            y: Math.random()*(this.height-100)+50,
+                            hp: 1, type: 'alien', w: 80, h: 50,
+                            vx: -3 - (this.level*0.5),
+                            shootTimer: Math.random()*100
+                        });
+                    }
+                } else if(!this.boss && this.bossTimer >= 1000 && this.enemies.length === 0) {
+                    // BOSS NERF: 15 + level*5 HP
+                    const bossMaxHp = 15 + (this.level * 5); 
+                    this.boss = {
+                        x: this.width - 300, y: this.height/2,
+                        hp: bossMaxHp, maxHp: bossMaxHp,
+                        type: 'boss', w: 250, h: 250, vy: 3, dir: 1,
+                        shootTimer: 0
+                    };
+                }
+
+                for(let i=this.enemies.length-1; i>=0; i--) {
+                    let e = this.enemies[i];
+                    e.x += e.vx;
+                    e.shootTimer++;
+                    if(e.shootTimer > 150) {
+                         this.enemyBullets.push({x: e.x, y: e.y});
+                         e.shootTimer = 0;
+                    }
+                    if(e.x < -100) this.enemies.splice(i,1);
+                    if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, e.x, e.y, e.w, e.h)) {
+                        this.damagePlayer(20);
+                        this.spawnExplosion(e.x, e.y);
+                        this.enemies.splice(i,1);
+                    }
+                }
+
+                if(this.boss) {
+                    this.boss.y += this.boss.vy * this.boss.dir;
+                    if(this.boss.y > this.height-150 || this.boss.y < 150) this.boss.dir *= -1;
+                    
+                    this.boss.shootTimer++;
+                    if(this.boss.shootTimer > 40) {
+                        this.enemyBullets.push({x: this.boss.x-100, y: this.boss.y});
+                        this.boss.shootTimer = 0;
+                    }
+                    if(this.checkRectCollision(this.player.x-40, this.player.y-30, 80, 60, this.boss.x, this.boss.y, this.boss.w, this.boss.h)) {
+                        if(this.player.immuneUntil < Date.now()) {
+                            this.damagePlayer(30);
+                            this.player.immuneUntil = Date.now() + 2000;
+                            this.player.x -= 150; 
+                        }
+                    }
+                }
+
+                for(let i=this.bullets.length-1; i>=0; i--) {
+                    let b = this.bullets[i];
+                    let hit = false;
+                    for(let j=this.enemies.length-1; j>=0; j--) {
+                        let e = this.enemies[j];
+                        if(this.checkRectCollision(b.x, b.y, 20, 8, e.x, e.y, e.w, e.h)) {
+                            this.enemies.splice(j,1);
+                            this.spawnExplosion(e.x, e.y);
+                            this.player.score += 50;
+                            hit = true; break;
+                        }
+                    }
+                    if(!hit && this.boss) {
+                        if(this.checkRectCollision(b.x, b.y, 20, 8, this.boss.x, this.boss.y, this.boss.w, this.boss.h)) {
+                            this.boss.hp--;
+                            this.spawnExplosion(b.x, b.y); 
+                            hit = true;
+                            if(this.boss.hp <= 0) {
+                                this.finishLevel();
+                            }
+                        }
+                    }
+                    if(hit) this.bullets.splice(i,1);
+                }
+                
+                if(this.player.ammo <= 0 && this.bullets.length === 0) {
+                    if(!this.player.reloadUsed) {
+                        this.startAmmoQuiz(true); 
+                    } else {
+                        setTimeout(() => {
+                             if(this.state === 'BATTLE' && this.player.ammo <= 0) this.gameOver("Amunisi Habis! Tidak bisa menembak.");
+                        }, 1000);
+                    }
+                }
+
+                if(this.player.hp <= 0) this.gameOver("Pesawat Hancur dalam Pertempuran!");
+            }
+
+            spawnBonus() {
+                this.bonusItems.push({
+                    x: this.width + 50,
+                    y: Math.random() * (this.height - 100) + 50
+                });
+            }
+
+            checkRectCollision(x1, y1, w1, h1, x2, y2, w2, h2) {
+                let r1x = x1 - w1/2, r1y = y1 - h1/2;
+                let r2x = x2 - w2/2, r2y = y2 - h2/2;
+                return r1x < r2x + w2 && r1x + w1 > r2x && r1y < r2y + h2 && r1y + h1 > r2y;
+            }
+
+            damagePlayer(amount) {
+                this.player.hp -= amount;
+                this.spawnExplosion(this.player.x, this.player.y);
+            }
+
+            drawBattle() {
+                const bgImg = this.images['bg'+(this.level+1)]; 
+                if(bgImg) {
+                    this.ctx.drawImage(bgImg, this.bgScrollX, 0, this.width, this.height);
+                    this.ctx.drawImage(bgImg, this.bgScrollX + this.width, 0, this.width, this.height);
+                }
+
+                this.drawPlayer(false);
+
+                this.enemies.forEach(e => {
+                    this.ctx.drawImage(this.images.alien, e.x-e.w/2, e.y-e.h/2, e.w, e.h);
+                });
+
+                // Draw Bonus
+                this.bonusItems.forEach(b => {
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.beginPath();
+                    // Draw a Medkit box
+                    this.ctx.fillRect(b.x-15, b.y-15, 30, 30);
+                    this.ctx.fillStyle = 'red';
+                    this.ctx.fillRect(b.x-5, b.y-10, 10, 20);
+                    this.ctx.fillRect(b.x-10, b.y-5, 20, 10);
+                    this.ctx.strokeStyle = '#000';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(b.x-15, b.y-15, 30, 30);
+                });
+
+                if(this.boss) {
+                    const bossImg = this.images['bos'+(this.level+1)];
+                    if(bossImg) this.ctx.drawImage(bossImg, this.boss.x-this.boss.w/2, this.boss.y-this.boss.h/2, this.boss.w, this.boss.h);
+                    
+                    this.ctx.fillStyle = 'red';
+                    this.ctx.fillRect(this.boss.x - 50, this.boss.y - this.boss.h/2 - 20, 100, 10);
+                    this.ctx.fillStyle = '#00ff00';
+                    this.ctx.fillRect(this.boss.x - 50, this.boss.y - this.boss.h/2 - 20, 100 * (this.boss.hp/this.boss.maxHp), 10);
+                }
+
+                this.ctx.fillStyle = 'yellow';
+                this.bullets.forEach(b => {
+                    this.ctx.fillRect(b.x, b.y-4, 20, 8);
+                });
+
+                this.ctx.fillStyle = '#ff00ff';
+                this.enemyBullets.forEach(eb => {
+                    this.ctx.beginPath(); this.ctx.arc(eb.x, eb.y, 8, 0, Math.PI*2); this.ctx.fill();
+                });
+
+                // HUD Battle
+                this.drawBar(40, 20, 300, 25, this.player.displayedHp, 100, '#ff0000', 'HP');
+                this.ctx.fillStyle = 'white'; this.ctx.textAlign='left';
+                this.ctx.font='bold 24px Segoe UI';
+                this.ctx.fillText(`Ammo: ${this.player.ammo}`, 40, 80);
+                this.ctx.fillText(`Score: ${this.player.score}`, 40, 110);
+                
+                if(this.player.reloadUsed && this.player.ammo < 10) {
+                     this.ctx.fillStyle = 'red'; this.ctx.font='bold 20px Segoe UI';
+                     this.ctx.fillText(`BAHAYA: AMUNISI KOSONG (TIDAK ADA RELOAD)`, 40, 140);
+                }
+            }
+
+            finishLevel() {
+                // Spawn big explosion first
+                this.spawnBigExplosion(this.boss.x, this.boss.y);
+                this.boss = null;
+                
+                // Immediately switch state to prevent glitch/update loop
+                // Wait 1.5s for explosion effect then show popup
+                setTimeout(() => {
+                    this.changeState('LEVEL_COMPLETE');
+                }, 1500); 
+            }
+
+            nextLevel() {
+                this.level++;
+                if(this.level >= 8) this.changeState('VICTORY');
+                else {
+                    this.changeState('LEVEL_INTRO');
+                }
+            }
+
+            gameOver(msg) {
+                this.changeState('GAMEOVER');
+                document.getElementById('end-title').innerText = "MISI GAGAL";
+                document.getElementById('end-message').innerText = msg;
+                document.getElementById('end-score').innerText = this.player.score;
+            }
+
+            showEndScreen() {
+                // Perbaikan: Munculkan layar akhir
+                document.getElementById('end-screen').classList.remove('hidden');
+                
+                if(this.state === 'VICTORY') {
+                    document.getElementById('end-title').innerText = "MISI SUKSES!";
+                    document.getElementById('end-title').style.color = "#00ff00";
+                    document.getElementById('end-message').innerText = `Selamat Komandan ${this.player.name}! Tata Surya aman berkat Anda.`;
+                    document.getElementById('end-score').innerText = this.player.score;
+                } else {
+                    // Pastikan warna kembali merah untuk Game Over
+                    document.getElementById('end-title').style.color = "red"; 
+                }
+            }
+        }
+
+        let game;
+        window.onload = () => { game = new Game(); };
+
+    </script>
 </body>
-
 </html>
-
